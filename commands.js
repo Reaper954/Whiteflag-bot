@@ -23,18 +23,18 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addRoleOption(o =>
       o.setName("role_100x")
-        .setDescription("Role to ping for 100x cluster")
+        .setDescription("Role to ping for PVP Chaos 100x")
         .setRequired(true)
     )
     .addRoleOption(o =>
       o.setName("role_25x")
-        .setDescription("Role to ping for 25x cluster")
+        .setDescription("Role to ping for PVP 25X")
         .setRequired(true)
     ),
 
   new SlashCommandBuilder()
-    .setName("post_whiteflag_button")
-    .setDescription("Post a White Flag registration button in this channel")
+    .setName("post_whiteflag_buttons")
+    .setDescription("Post White Flag registration buttons (100x + 25x)")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   new SlashCommandBuilder()

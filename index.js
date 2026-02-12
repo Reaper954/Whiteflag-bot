@@ -19,7 +19,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const WHITEFLAGS_FILE = path.join(__dirname, "whiteflags.json");
 const SETTINGS_FILE = path.join(__dirname, "settings.json");
 
-// ----------------- JSON helpers -----------------
+// ================= JSON helpers =================
 function loadJson(file, fallback) {
   try {
     if (!fs.existsSync(file)) return fallback;
@@ -51,7 +51,7 @@ function getGuildSettings(guildId) {
   return all[guildId] || null;
 }
 
-// ----------------- time / prune -----------------
+// ================= Time / prune =================
 function nowMs() {
   return Date.now();
 }
@@ -62,34 +62,49 @@ function pruneExpired(items) {
   return active;
 }
 
-// ----------------- role mention helper -----------------
+// ================= Cluster constants =================
+const CLUSTER_100X = "PVP Chaos 100x";
+const CLUSTER_25X = "PVP 25X";
+
+function normalizeClusterKey(key) {
+  const k = (key || "").toLowerCase().trim();
+  if (k === "100x") return "100x";
+  if (k === "25x") return "25x";
+  return "";
+}
+
+function clusterFromKey(key) {
+  const k = normalizeClusterKey(key);
+  if (k === "100x") return CLUSTER_100X;
+  if (k === "25x") return CLUSTER_25X;
+  return "";
+}
+
+// ================= Role mention helper (exact) =================
 function getClusterRoleMention(guildId, clusterRaw) {
   const s = getGuildSettings(guildId);
   if (!s) return "";
 
-  const cluster = (clusterRaw || "").toLowerCase();
+  const c = (clusterRaw || "").trim().toLowerCase();
 
-  if (cluster.includes("100")) return s.role100xId ? `<@&${s.role100xId}>` : "";
-  if (cluster.includes("25")) return s.role25xId ? `<@&${s.role25xId}>` : "";
+  if (c === CLUSTER_100X.toLowerCase()) return s.role100xId ? `<@&${s.role100xId}>` : "";
+  if (c === CLUSTER_25X.toLowerCase()) return s.role25xId ? `<@&${s.role25xId}>` : "";
 
   return "";
 }
 
-// ----------------- modal builder -----------------
-function buildWhiteflagModal() {
+// ================= Modal builder (cluster locked) =================
+function buildWhiteflagModal(clusterKey) {
+  const cluster = clusterFromKey(clusterKey);
+  if (!cluster) return null;
+
   const modal = new ModalBuilder()
-    .setCustomId("whiteflag_register_modal")
-    .setTitle("White Flag Registration");
+    .setCustomId(`whiteflag_register_modal:${normalizeClusterKey(clusterKey)}`)
+    .setTitle(`White Flag Registration — ${cluster}`);
 
   const tribe = new TextInputBuilder()
     .setCustomId("tribe")
     .setLabel("Tribe Name")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  const cluster = new TextInputBuilder()
-    .setCustomId("cluster")
-    .setLabel("Cluster (100x / 25x)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
@@ -113,7 +128,6 @@ function buildWhiteflagModal() {
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(tribe),
-    new ActionRowBuilder().addComponents(cluster),
     new ActionRowBuilder().addComponents(ign),
     new ActionRowBuilder().addComponents(mapcoords),
     new ActionRowBuilder().addComponents(notes)
@@ -122,7 +136,7 @@ function buildWhiteflagModal() {
   return modal;
 }
 
-// ----------------- log helpers -----------------
+// ================= Log helpers =================
 async function sendModLog(guild, embed) {
   const settings = getGuildSettings(guild.id);
   if (!settings?.modLogChannelId) return;
@@ -158,17 +172,26 @@ client.once("clientReady", () => {
 });
 
 client.on("interactionCreate", async (interaction) => {
-  // ----------------- Button click -> open modal -----------------
-  if (interaction.isButton() && interaction.customId === "whiteflag_button") {
-    const modal = buildWhiteflagModal();
+  // ================= Button click -> open modal =================
+  if (interaction.isButton() && interaction.customId.startsWith("whiteflag_button:")) {
+    const clusterKey = interaction.customId.split(":")[1];
+    const modal = buildWhiteflagModal(clusterKey);
+    if (!modal) {
+      return interaction.reply({ content: "❌ Invalid cluster button.", ephemeral: true });
+    }
     await interaction.showModal(modal);
     return;
   }
 
-  // ----------------- Modal submit -> save + ping + log -----------------
-  if (interaction.isModalSubmit() && interaction.customId === "whiteflag_register_modal") {
+  // ================= Modal submit =================
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("whiteflag_register_modal:")) {
+    const clusterKey = interaction.customId.split(":")[1];
+    const cluster = clusterFromKey(clusterKey);
+    if (!cluster) {
+      return interaction.reply({ content: "❌ Invalid cluster form.", ephemeral: true });
+    }
+
     const tribe = interaction.fields.getTextInputValue("tribe");
-    const cluster = interaction.fields.getTextInputValue("cluster");
     const ign = interaction.fields.getTextInputValue("ign");
     const mapcoords = interaction.fields.getTextInputValue("mapcoords");
     const notes = interaction.fields.getTextInputValue("notes") || "";
@@ -176,11 +199,8 @@ client.on("interactionCreate", async (interaction) => {
     let items = pruneExpired(loadWhiteflags());
 
     const exists = items.find(
-      x =>
-        x.tribe.toLowerCase() === tribe.toLowerCase() &&
-        x.cluster.toLowerCase() === cluster.toLowerCase()
+      x => x.tribe.toLowerCase() === tribe.toLowerCase() && x.cluster.toLowerCase() === cluster.toLowerCase()
     );
-
     if (exists) {
       return interaction.reply({
         content: `⚠️ **${tribe}** already has an active White Flag on **${cluster}**.`,
@@ -238,7 +258,7 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
-  // ----------------- Slash commands -----------------
+  // ================= Slash commands =================
   if (!interaction.isChatInputCommand()) return;
 
   const cmd = interaction.commandName;
@@ -290,30 +310,35 @@ client.on("interactionCreate", async (interaction) => {
     const embed = new EmbedBuilder()
       .setTitle("✅ Role Ping Setup Saved")
       .addFields(
-        { name: "100x Role", value: `<@&${role100x.id}>`, inline: false },
-        { name: "25x Role", value: `<@&${role25x.id}>`, inline: false }
+        { name: "PVP Chaos 100x Role", value: `<@&${role100x.id}>`, inline: false },
+        { name: "PVP 25X Role", value: `<@&${role25x.id}>`, inline: false }
       );
 
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
 
-  if (cmd === "post_whiteflag_button") {
+  if (cmd === "post_whiteflag_buttons") {
     if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
 
     const embed = new EmbedBuilder()
       .setTitle("🟢 White Flag Registration")
-      .setDescription("Click the button below to register your tribe for White Flag protection.");
+      .setDescription("Choose your cluster, then fill out the form.");
 
-    const button = new ButtonBuilder()
-      .setCustomId("whiteflag_button")
-      .setLabel("Register White Flag")
+    const b100 = new ButtonBuilder()
+      .setCustomId("whiteflag_button:100x")
+      .setLabel(CLUSTER_100X)
       .setStyle(ButtonStyle.Success);
 
-    const row = new ActionRowBuilder().addComponents(button);
+    const b25 = new ButtonBuilder()
+      .setCustomId("whiteflag_button:25x")
+      .setLabel(CLUSTER_25X)
+      .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder().addComponents(b100, b25);
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: "✅ Button posted.", ephemeral: true });
+    await interaction.reply({ content: "✅ Buttons posted.", ephemeral: true });
     return;
   }
 
