@@ -67,5 +67,6 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
     console.log("✅ Commands registered.");
   } catch (err) {
     console.error(err);
+    process.exitCode = 1;
   }
 })();
