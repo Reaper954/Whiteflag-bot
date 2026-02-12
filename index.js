@@ -110,19 +110,19 @@ function buildWhiteflagModal(clusterKey) {
 
   const ign = new TextInputBuilder()
     .setCustomId("ign")
-    .setLabel("In-Game Name (IGN)")
+    .setLabel("IGN")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   const mapcoords = new TextInputBuilder()
     .setCustomId("mapcoords")
-    .setLabel("Map & Coords (example: Island 50,50)")
+    .setLabel("Map")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   const notes = new TextInputBuilder()
     .setCustomId("notes")
-    .setLabel("Notes (optional)")
+    .setLabel("Tribe mates")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false);
 
