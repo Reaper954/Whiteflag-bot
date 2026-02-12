@@ -4,7 +4,7 @@ require("dotenv").config();
 const commands = [
   new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Configure channels for announcements & logs")
+    .setDescription("Configure channels for Open Season + Mod Logs")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addChannelOption(o =>
       o.setName("open_season_channel")
@@ -16,43 +16,6 @@ const commands = [
         .setDescription("Where mod logs go")
         .setRequired(true)
     ),
-
-  new SlashCommandBuilder()
-    .setName("announce")
-    .setDescription("Post an announcement to a channel")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addChannelOption(o =>
-      o.setName("channel").setDescription("Where to post").setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName("message").setDescription("Announcement text").setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
-    .setName("rules")
-    .setDescription("Post the white-flag rules"),
-
-  new SlashCommandBuilder()
-    .setName("whiteflag_form")
-    .setDescription("Open the White Flag registration form (modal)"),
-
-  new SlashCommandBuilder()
-    .setName("whiteflag")
-    .setDescription("Register a tribe for White Flag protection (7 days)")
-    .addStringOption(o => o.setName("tribe").setDescription("Tribe name").setRequired(true))
-    .addStringOption(o => o.setName("cluster").setDescription("Cluster (100x / 25x etc.)").setRequired(true))
-    .addStringOption(o => o.setName("notes").setDescription("Optional notes").setRequired(false)),
-
-  new SlashCommandBuilder()
-    .setName("whiteflag_list")
-    .setDescription("List active white flags"),
-
-  new SlashCommandBuilder()
-    .setName("whiteflag_end")
-    .setDescription("End a tribe's white flag early")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addStringOption(o => o.setName("tribe").setDescription("Tribe name").setRequired(true))
-    .addStringOption(o => o.setName("reason").setDescription("Reason (optional)").setRequired(false)),
 
   new SlashCommandBuilder()
     .setName("setup_roles")
@@ -68,11 +31,34 @@ const commands = [
         .setDescription("Role to ping for 25x cluster")
         .setRequired(true)
     ),
-    new SlashCommandBuilder()
-  .setName("post_whiteflag_button")
-  .setDescription("Post the White Flag registration button")
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
+  new SlashCommandBuilder()
+    .setName("post_whiteflag_button")
+    .setDescription("Post a White Flag registration button in this channel")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+
+  new SlashCommandBuilder()
+    .setName("rules")
+    .setDescription("Post the White Flag rules"),
+
+  new SlashCommandBuilder()
+    .setName("whiteflag_list")
+    .setDescription("List active White Flags"),
+
+  new SlashCommandBuilder()
+    .setName("whiteflag_end")
+    .setDescription("End a tribe's White Flag early")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption(o =>
+      o.setName("tribe")
+        .setDescription("Tribe name")
+        .setRequired(true)
+    )
+    .addStringOption(o =>
+      o.setName("reason")
+        .setDescription("Reason (optional)")
+        .setRequired(false)
+    ),
 ].map(c => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);

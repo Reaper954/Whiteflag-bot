@@ -1,7 +1,5 @@
 require("dotenv").config();
 const {
-  ButtonBuilder,
-  ButtonStyle,
   Client,
   GatewayIntentBits,
   PermissionFlagsBits,
@@ -10,6 +8,8 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
@@ -19,7 +19,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const WHITEFLAGS_FILE = path.join(__dirname, "whiteflags.json");
 const SETTINGS_FILE = path.join(__dirname, "settings.json");
 
-// ---------- Storage helpers ----------
+// ----------------- JSON helpers -----------------
 function loadJson(file, fallback) {
   try {
     if (!fs.existsSync(file)) return fallback;
@@ -40,17 +40,29 @@ function saveWhiteflags(items) {
 }
 
 function loadSettings() {
-  // { [guildId]: { openSeasonChannelId, modLogChannelId } }
+  // { [guildId]: { openSeasonChannelId, modLogChannelId, role100xId, role25xId } }
   return loadJson(SETTINGS_FILE, {});
 }
 function saveSettings(s) {
   saveJson(SETTINGS_FILE, s);
 }
-
 function getGuildSettings(guildId) {
   const all = loadSettings();
   return all[guildId] || null;
 }
+
+// ----------------- time / prune -----------------
+function nowMs() {
+  return Date.now();
+}
+function pruneExpired(items) {
+  const t = nowMs();
+  const active = items.filter(x => x.expiresAt > t);
+  if (active.length !== items.length) saveWhiteflags(active);
+  return active;
+}
+
+// ----------------- role mention helper -----------------
 function getClusterRoleMention(guildId, clusterRaw) {
   const s = getGuildSettings(guildId);
   if (!s) return "";
@@ -63,52 +75,8 @@ function getClusterRoleMention(guildId, clusterRaw) {
   return "";
 }
 
-// ---------- Time / pruning ----------
-function nowMs() {
-  return Date.now();
-}
-function pruneExpired(items) {
-  const t = nowMs();
-  const active = items.filter(x => x.expiresAt > t);
-  if (active.length !== items.length) saveWhiteflags(active);
-  return active;
-}
-
-// ---------- Logging helpers ----------
-async function sendModLog(guild, embed) {
-  const settings = getGuildSettings(guild.id);
-  if (!settings?.modLogChannelId) return;
-
-  const ch = await guild.channels.fetch(settings.modLogChannelId).catch(() => null);
-  if (!ch) return;
-
-  await ch.send({ embeds: [embed] }).catch(() => null);
-}
-
-async function sendOpenSeason(guild, tribe, cluster, reason) {
-  const settings = getGuildSettings(guild.id);
-  if (!settings?.openSeasonChannelId) return;
-
-  const ch = await guild.channels.fetch(settings.openSeasonChannelId).catch(() => null);
-  if (!ch) return;
-
-  const ping = getClusterRoleMention(guild.id, cluster);
-
-  const text =
-    `${ping ? ping + "\n" : ""}🚨 **OPEN SEASON** 🚨\n` +
-    `White Flag has been removed for **${tribe}** on **${cluster}**.\n` +
-    (reason ? `Reason: **${reason}**\n` : "") +
-    `Raids are now allowed.`;
-
-  await ch.send(text).catch(() => null);
-}
-
-client.once("ready", () => {
-  console.log(`✅ Logged in as ${client.user.tag}`);
-  pruneExpired(loadWhiteflags());
-});
-// Button click handler
-if (interaction.isButton() && interaction.customId === "whiteflag_button") {
+// ----------------- modal builder -----------------
+function buildWhiteflagModal() {
   const modal = new ModalBuilder()
     .setCustomId("whiteflag_register_modal")
     .setTitle("White Flag Registration");
@@ -127,19 +95,19 @@ if (interaction.isButton() && interaction.customId === "whiteflag_button") {
 
   const ign = new TextInputBuilder()
     .setCustomId("ign")
-    .setLabel("In-Game Name")
+    .setLabel("In-Game Name (IGN)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   const mapcoords = new TextInputBuilder()
     .setCustomId("mapcoords")
-    .setLabel("Map & Coordinates")
+    .setLabel("Map & Coords (example: Island 50,50)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
   const notes = new TextInputBuilder()
     .setCustomId("notes")
-    .setLabel("Notes")
+    .setLabel("Notes (optional)")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(false);
 
@@ -151,13 +119,53 @@ if (interaction.isButton() && interaction.customId === "whiteflag_button") {
     new ActionRowBuilder().addComponents(notes)
   );
 
-  await interaction.showModal(modal);
-  return;
+  return modal;
 }
 
-// ---------- Interactions ----------
+// ----------------- log helpers -----------------
+async function sendModLog(guild, embed) {
+  const settings = getGuildSettings(guild.id);
+  if (!settings?.modLogChannelId) return;
+
+  const ch = await guild.channels.fetch(settings.modLogChannelId).catch(() => null);
+  if (!ch) return;
+
+  await ch.send({ embeds: [embed], allowedMentions: { parse: ["roles"] } }).catch(() => null);
+}
+
+async function sendOpenSeason(guild, tribe, cluster, reason) {
+  const settings = getGuildSettings(guild.id);
+  if (!settings?.openSeasonChannelId) return;
+
+  const ch = await guild.channels.fetch(settings.openSeasonChannelId).catch(() => null);
+  if (!ch) return;
+
+  const ping = getClusterRoleMention(guild.id, cluster);
+
+  const text =
+    `${ping ? ping + "\n" : ""}` +
+    `🚨 **OPEN SEASON** 🚨\n` +
+    `White Flag has been removed for **${tribe}** on **${cluster}**.\n` +
+    (reason ? `Reason: **${reason}**\n` : "") +
+    `Raids are now allowed.`;
+
+  await ch.send({ content: text, allowedMentions: { parse: ["roles"] } }).catch(() => null);
+}
+
+client.once("clientReady", () => {
+  console.log(`✅ Logged in as ${client.user.tag}`);
+  pruneExpired(loadWhiteflags());
+});
+
 client.on("interactionCreate", async (interaction) => {
-  // Modal submission
+  // ----------------- Button click -> open modal -----------------
+  if (interaction.isButton() && interaction.customId === "whiteflag_button") {
+    const modal = buildWhiteflagModal();
+    await interaction.showModal(modal);
+    return;
+  }
+
+  // ----------------- Modal submit -> save + ping + log -----------------
   if (interaction.isModalSubmit() && interaction.customId === "whiteflag_register_modal") {
     const tribe = interaction.fields.getTextInputValue("tribe");
     const cluster = interaction.fields.getTextInputValue("cluster");
@@ -168,8 +176,9 @@ client.on("interactionCreate", async (interaction) => {
     let items = pruneExpired(loadWhiteflags());
 
     const exists = items.find(
-      x => x.tribe.toLowerCase() === tribe.toLowerCase() &&
-           x.cluster.toLowerCase() === cluster.toLowerCase()
+      x =>
+        x.tribe.toLowerCase() === tribe.toLowerCase() &&
+        x.cluster.toLowerCase() === cluster.toLowerCase()
     );
 
     if (exists) {
@@ -182,30 +191,25 @@ client.on("interactionCreate", async (interaction) => {
     const createdAt = nowMs();
     const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
 
-    const record = {
+    items.push({
       tribe,
       cluster,
-      notes,
       ign,
       mapcoords,
+      notes,
       createdBy: interaction.user.tag,
       createdAt,
       expiresAt,
-    };
+    });
 
-    items.push(record);
     saveWhiteflags(items);
-const ping = getClusterRoleMention(interaction.guild.id, cluster);
-if (ping) {
-  await interaction.channel.send(`${ping} New White Flag registration: **${tribe}** (${cluster})`);
-}
 
     const embed = new EmbedBuilder()
-      .setTitle("✅ White Flag Activated (Form)")
+      .setTitle("✅ White Flag Activated")
       .addFields(
         { name: "Tribe", value: tribe, inline: true },
         { name: "Cluster", value: cluster, inline: true },
-        { name: "Player IGN", value: ign, inline: true },
+        { name: "IGN", value: ign, inline: true },
         { name: "Map / Coords", value: mapcoords, inline: false },
         { name: "Expires", value: `<t:${Math.floor(expiresAt / 1000)}:F>`, inline: false },
         { name: "Notes", value: notes || "None", inline: false }
@@ -213,10 +217,17 @@ if (ping) {
 
     await interaction.reply({ embeds: [embed] });
 
-    // Mod-log it
+    const ping = getClusterRoleMention(interaction.guild.id, cluster);
+    if (ping) {
+      await interaction.channel.send({
+        content: `${ping} New White Flag registration: **${tribe}** (${cluster})`,
+        allowedMentions: { parse: ["roles"] },
+      });
+    }
+
     const logEmbed = new EmbedBuilder()
       .setTitle("📝 White Flag Registered")
-      .setDescription(`Registered via modal by **${interaction.user.tag}**`)
+      .setDescription(`Registered by **${interaction.user.tag}**`)
       .addFields(
         { name: "Tribe", value: tribe, inline: true },
         { name: "Cluster", value: cluster, inline: true },
@@ -227,7 +238,7 @@ if (ping) {
     return;
   }
 
-  // Slash commands
+  // ----------------- Slash commands -----------------
   if (!interaction.isChatInputCommand()) return;
 
   const cmd = interaction.commandName;
@@ -245,6 +256,7 @@ if (ping) {
 
     const all = loadSettings();
     all[guild.id] = {
+      ...(all[guild.id] || {}),
       openSeasonChannelId: openSeasonChannel.id,
       modLogChannelId: modLogChannel.id,
     };
@@ -260,46 +272,48 @@ if (ping) {
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
-if (cmd === "setup_roles") {
-  if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
 
-  const role100x = interaction.options.getRole("role_100x", true);
-  const role25x = interaction.options.getRole("role_25x", true);
-
-  const all = loadSettings();
-  all[guild.id] = {
-    ...(all[guild.id] || {}),
-    role100xId: role100x.id,
-    role25xId: role25x.id,
-  };
-  saveSettings(all);
-
-  const embed = new EmbedBuilder()
-    .setTitle("✅ Role Ping Setup Saved")
-    .addFields(
-      { name: "100x Role", value: `<@&${role100x.id}>`, inline: false },
-      { name: "25x Role", value: `<@&${role25x.id}>`, inline: false }
-    );
-
-  await interaction.reply({ embeds: [embed], ephemeral: true });
-  return;
-}
-
-  if (cmd === "announce") {
+  if (cmd === "setup_roles") {
     if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
 
-    const channel = interaction.options.getChannel("channel", true);
-    const message = interaction.options.getString("message", true);
+    const role100x = interaction.options.getRole("role_100x", true);
+    const role25x = interaction.options.getRole("role_25x", true);
 
-    await channel.send(message);
-    await interaction.reply({ content: "✅ Announcement sent.", ephemeral: true });
+    const all = loadSettings();
+    all[guild.id] = {
+      ...(all[guild.id] || {}),
+      role100xId: role100x.id,
+      role25xId: role25x.id,
+    };
+    saveSettings(all);
 
-    const logEmbed = new EmbedBuilder()
-      .setTitle("📣 Announcement Sent")
-      .setDescription(`By **${interaction.user.tag}** in <#${channel.id}>`)
-      .addFields({ name: "Message", value: message.slice(0, 1024) });
+    const embed = new EmbedBuilder()
+      .setTitle("✅ Role Ping Setup Saved")
+      .addFields(
+        { name: "100x Role", value: `<@&${role100x.id}>`, inline: false },
+        { name: "25x Role", value: `<@&${role25x.id}>`, inline: false }
+      );
 
-    await sendModLog(guild, logEmbed);
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
+
+  if (cmd === "post_whiteflag_button") {
+    if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
+
+    const embed = new EmbedBuilder()
+      .setTitle("🟢 White Flag Registration")
+      .setDescription("Click the button below to register your tribe for White Flag protection.");
+
+    const button = new ButtonBuilder()
+      .setCustomId("whiteflag_button")
+      .setLabel("Register White Flag")
+      .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder().addComponents(button);
+
+    await interaction.channel.send({ embeds: [embed], components: [row] });
+    await interaction.reply({ content: "✅ Button posted.", ephemeral: true });
     return;
   }
 
@@ -312,135 +326,6 @@ if (cmd === "setup_roles") {
 
     const embed = new EmbedBuilder().setTitle("White Flag Rules").setDescription(rulesText);
     await interaction.reply({ embeds: [embed] });
-    return;
-  }
-if (cmd === "post_whiteflag_button") {
-  if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
-
-  const embed = new EmbedBuilder()
-    .setTitle("🟢 White Flag Registration")
-    .setDescription("Click the button below to register your tribe for White Flag protection.");
-
-  const button = new ButtonBuilder()
-    .setCustomId("whiteflag_button")
-    .setLabel("Register White Flag")
-    .setStyle(ButtonStyle.Success);
-
-  const row = new ActionRowBuilder().addComponents(button);
-
-  await interaction.channel.send({ embeds: [embed], components: [row] });
-
-  await interaction.reply({ content: "✅ Button posted.", ephemeral: true });
-  return;
-}
-
-  if (cmd === "whiteflag_form") {
-    // Modal = your “form”
-    const modal = new ModalBuilder()
-      .setCustomId("whiteflag_register_modal")
-      .setTitle("White Flag Registration");
-
-    const tribe = new TextInputBuilder()
-      .setCustomId("tribe")
-      .setLabel("Tribe Name")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const cluster = new TextInputBuilder()
-      .setCustomId("cluster")
-      .setLabel("Cluster (100x / 25x / etc.)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const ign = new TextInputBuilder()
-      .setCustomId("ign")
-      .setLabel("In-Game Name (IGN)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const mapcoords = new TextInputBuilder()
-      .setCustomId("mapcoords")
-      .setLabel("Map & Coords (example: Island 50,50)")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true);
-
-    const notes = new TextInputBuilder()
-      .setCustomId("notes")
-      .setLabel("Notes (optional)")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(false);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(tribe),
-      new ActionRowBuilder().addComponents(cluster),
-      new ActionRowBuilder().addComponents(ign),
-      new ActionRowBuilder().addComponents(mapcoords),
-      new ActionRowBuilder().addComponents(notes),
-    );
-
-    await interaction.showModal(modal);
-    return;
-  }
-
-  if (cmd === "whiteflag") {
-    const tribe = interaction.options.getString("tribe", true);
-    const cluster = interaction.options.getString("cluster", true);
-    const notes = interaction.options.getString("notes") || "";
-
-    let items = pruneExpired(loadWhiteflags());
-
-    const exists = items.find(
-      x => x.tribe.toLowerCase() === tribe.toLowerCase() &&
-           x.cluster.toLowerCase() === cluster.toLowerCase()
-    );
-    if (exists) {
-      return interaction.reply({
-        content: `⚠️ ${tribe} already has an active White Flag on ${cluster}.`,
-        ephemeral: true,
-      });
-    }
-
-    const createdAt = nowMs();
-    const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000;
-
-    items.push({
-      tribe,
-      cluster,
-      notes,
-      createdBy: interaction.user.tag,
-      createdAt,
-      expiresAt,
-    });
-    saveWhiteflags(items);
-const ping = getClusterRoleMention(guild.id, cluster);
-if (ping) {
-  await interaction.channel.send({
-    content: `${ping} New White Flag registration: **${tribe}** (${cluster})`,
-    allowedMentions: { parse: ["roles"] }
-  });
-}
-
-    const embed = new EmbedBuilder()
-      .setTitle("✅ White Flag Activated")
-      .addFields(
-        { name: "Tribe", value: tribe, inline: true },
-        { name: "Cluster", value: cluster, inline: true },
-        { name: "Expires", value: `<t:${Math.floor(expiresAt / 1000)}:F>`, inline: false },
-        { name: "Notes", value: notes || "None", inline: false }
-      );
-
-    await interaction.reply({ embeds: [embed] });
-
-    const logEmbed = new EmbedBuilder()
-      .setTitle("📝 White Flag Registered")
-      .setDescription(`By **${interaction.user.tag}**`)
-      .addFields(
-        { name: "Tribe", value: tribe, inline: true },
-        { name: "Cluster", value: cluster, inline: true },
-        { name: "Expires", value: `<t:${Math.floor(expiresAt / 1000)}:F>`, inline: false }
-      );
-
-    await sendModLog(guild, logEmbed);
     return;
   }
 
@@ -464,25 +349,29 @@ if (ping) {
   if (cmd === "whiteflag_end") {
     if (!isAdmin) return interaction.reply({ content: "❌ No permission.", ephemeral: true });
 
-    const tribe = interaction.options.getString("tribe", true);
+    const tribeInput = interaction.options.getString("tribe", true);
     const reason = interaction.options.getString("reason") || "";
 
     let items = pruneExpired(loadWhiteflags());
-    const toEnd = items.find(x => x.tribe.toLowerCase() === tribe.toLowerCase());
+    const toEnd = items.find(x => x.tribe.toLowerCase() === tribeInput.toLowerCase());
 
     if (!toEnd) {
-      return interaction.reply({ content: `Could not find an active White Flag for **${tribe}**.`, ephemeral: true });
+      return interaction.reply({
+        content: `Could not find an active White Flag for **${tribeInput}**.`,
+        ephemeral: true,
+      });
     }
 
     items = items.filter(x => x !== toEnd);
     saveWhiteflags(items);
 
-    await interaction.reply({ content: `✅ Ended White Flag early for **${toEnd.tribe}**.`, ephemeral: true });
+    await interaction.reply({
+      content: `✅ Ended White Flag early for **${toEnd.tribe}**.`,
+      ephemeral: true,
+    });
 
-    // (1) Open Season announcement
     await sendOpenSeason(guild, toEnd.tribe, toEnd.cluster, reason);
 
-    // (3) Mod log
     const logEmbed = new EmbedBuilder()
       .setTitle("🚫 White Flag Ended Early")
       .setDescription(`Ended by **${interaction.user.tag}**`)
@@ -498,4 +387,3 @@ if (ping) {
 });
 
 client.login(process.env.DISCORD_TOKEN);
-require("dotenv").config();
