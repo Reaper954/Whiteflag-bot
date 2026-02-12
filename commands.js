@@ -5,7 +5,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName("setup")
     .setDescription("Configure channels for Open Season + Mod Logs")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(o =>
       o.setName("open_season_channel")
         .setDescription("Where Open Season announcements go")
@@ -20,7 +20,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName("setup_roles")
     .setDescription("Set staff roles to ping per cluster")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addRoleOption(o =>
       o.setName("role_100x")
         .setDescription("Role to ping for PVP Chaos 100x")
@@ -35,7 +35,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName("post_whiteflag_buttons")
     .setDescription("Post White Flag registration buttons (100x + 25x)")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
     .setName("rules")
@@ -43,12 +43,13 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("whiteflag_list")
-    .setDescription("List active White Flags"),
-
+    .setDescription("List active White Flags")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
   new SlashCommandBuilder()
     .setName("whiteflag_end")
     .setDescription("End a tribe's White Flag early")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(o =>
       o.setName("tribe")
         .setDescription("Tribe name")
@@ -57,7 +58,7 @@ const commands = [
     .addStringOption(o =>
       o.setName("reason")
         .setDescription("Reason (optional)")
-        .setRequired(false)
+        .setRequired(true)
     ),
 ].map(c => c.toJSON());
 
