@@ -70,6 +70,12 @@ const commands = [
   new SlashCommandBuilder()
     .setName("rules")
     .setDescription("Show the White Flag rules (ephemeral)."),
+  new SlashCommandBuilder()
+    .setName("whiteflags")
+    .setDescription("White Flag utilities.")
+    .addSubcommand((sc) =>
+      sc.setName("active").setDescription("Show all approved + active White Flags.")
+    ),
 ].map((c) => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);

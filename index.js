@@ -1,12 +1,18 @@
 // index.js
 // Production-ready Discord.js v14 bot for White Flag system using JSON storage.
+//
 // Features:
 // - /setup posts rules + apply panel (button-based modal form)
 // - Rules must be accepted before form can submit (role gate)
+// - Two separate application forms:
+//    • 25x PVP
+//    • 100x PVP Chaos
 // - On submit: pings admin role in admin channel with Approve/Deny buttons
 // - Approve: starts 7-day timer (no Open Season ping on expiry)
 // - Admin can end early via button -> cancels timer + pings Open Season role in announce channel
 // - /rules shows rules
+// - /whiteflags active shows all approved + active White Flags
+// - Enforces: only 1 active White Flag per tribe (across both modes)
 //
 // Requirements: discord.js v14, Node 18+
 // Env:
@@ -118,8 +124,13 @@ const activeTimeouts = new Map();
 // -------------------- Constants for custom IDs --------------------
 const CID = {
   RULES_ACCEPT: "wf_rules_accept",
-  APPLY_OPEN: "wf_apply_open",
-  APPLY_MODAL: "wf_apply_modal",
+
+  APPLY_OPEN_25: "wf_apply_open_25",
+  APPLY_OPEN_100: "wf_apply_open_100",
+
+  APPLY_MODAL_25: "wf_apply_modal_25",
+  APPLY_MODAL_100: "wf_apply_modal_100",
+
   ADMIN_APPROVE_PREFIX: "wf_admin_approve:", // + requestId
   ADMIN_DENY_PREFIX: "wf_admin_deny:", // + requestId
   ADMIN_END_EARLY_PREFIX: "wf_admin_end:", // + requestId
@@ -136,7 +147,7 @@ function persist() {
 
 function escapeMd(str) {
   if (!str) return "";
-  return String(str).replace(/([*_`~|>])/g, "\\$1");
+  return String(str).replace(/([*_`~|>])/g, "\\\\$1");
 }
 
 function isTextChannel(ch) {
@@ -153,9 +164,36 @@ function newRequestId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeTribeName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\\s+/g, " ");
+}
+
+function isApprovedAndActive(req, now = Date.now()) {
+  return (
+    req &&
+    req.status === "approved" &&
+    typeof req.approvedAt === "number" &&
+    req.approvedAt + SEVEN_DAYS_MS > now
+  );
+}
+
 function getPendingRequestForUser(userId) {
   for (const r of Object.values(requests)) {
     if (r?.requestedBy === userId && r?.status === "pending") return r;
+  }
+  return null;
+}
+
+function getActiveApprovedForTribe(tribeName, excludeId = null) {
+  const key = normalizeTribeName(tribeName);
+  const now = Date.now();
+  for (const r of Object.values(requests)) {
+    if (excludeId && r?.id === excludeId) continue;
+    if (normalizeTribeName(r?.tribeName) !== key) continue;
+    if (isApprovedAndActive(r, now)) return r;
   }
   return null;
 }
@@ -200,6 +238,11 @@ async function safeFetchChannel(guild, channelId) {
   return guild.channels.fetch(channelId).catch(() => null);
 }
 
+function fmtDiscordRelativeTime(msEpoch) {
+  const seconds = Math.floor(msEpoch / 1000);
+  return `<t:${seconds}:R>`;
+}
+
 // -------------------- Timer lifecycle --------------------
 function scheduleExpiry(requestId) {
   const req = requests[requestId];
@@ -233,7 +276,9 @@ function scheduleExpiry(requestId) {
       const adminCh = await safeFetchChannel(guild, state.adminChannelId);
       if (adminCh && isTextChannel(adminCh)) {
         await adminCh.send(
-          `⏳ White Flag expired for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(r.ign)}**).`
+          `⏳ White Flag expired for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
+            r.ign
+          )}**, Server: **${escapeMd(r.serverType || r.cluster || "N/A")}**).`
         );
       }
     } finally {
@@ -267,7 +312,9 @@ async function expireOverdueApprovalsOnStartup() {
             await adminCh.send(
               `⏳ White Flag expired (while bot was offline) for **${escapeMd(
                 r.tribeName
-              )}** (IGN: **${escapeMd(r.ign)}**).`
+              )}** (IGN: **${escapeMd(r.ign)}**, Server: **${escapeMd(
+                r.serverType || r.cluster || "N/A"
+              )}**).`
             );
           }
         }
@@ -309,7 +356,7 @@ function buildRulesEmbed() {
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
-      ].join("\n")
+      ].join("\\n")
     );
 }
 
@@ -324,36 +371,52 @@ function buildRulesRow() {
 
 function buildApplyEmbed() {
   return new EmbedBuilder()
-    .setTitle("🏳️ White Flag Application")
+    .setTitle("🏳️ White Flag Applications")
     .setDescription(
       [
         "Before applying, you must read and accept the rules.",
         "",
-        "Click **Apply for White Flag** to submit your request (IGN, Tribe, Cluster, Map).",
-      ].join("\n")
+        "Choose the correct server and submit your request:",
+        "• **25x PVP**",
+        "• **100x PVP Chaos**",
+        "",
+        "**Important:** Only **1 active White Flag per tribe** is allowed.",
+      ].join("\\n")
     );
 }
 
 function buildApplyRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(CID.APPLY_OPEN)
-      .setLabel("🏳️ Apply for White Flag")
-      .setStyle(ButtonStyle.Primary)
+      .setCustomId(CID.APPLY_OPEN_25)
+      .setLabel("🏳️ Apply — 25x PVP")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(CID.APPLY_OPEN_100)
+      .setLabel("🏳️ Apply — 100x PVP Chaos")
+      .setStyle(ButtonStyle.Secondary)
   );
 }
 
 function buildAdminReviewEmbed(req) {
-  return new EmbedBuilder()
+  const endsAt = req?.approvedAt ? req.approvedAt + SEVEN_DAYS_MS : null;
+
+  const embed = new EmbedBuilder()
     .setTitle("📥 New White Flag Application")
     .addFields(
+      { name: "Server", value: escapeMd(req.serverType || req.cluster || "N/A"), inline: true },
       { name: "IGN", value: escapeMd(req.ign), inline: true },
       { name: "Tribe Name", value: escapeMd(req.tribeName), inline: true },
-      { name: "Cluster", value: escapeMd(req.cluster), inline: true },
       { name: "Map", value: escapeMd(req.map), inline: true },
       { name: "Requested By", value: `<@${req.requestedBy}>`, inline: false }
     )
     .setFooter({ text: `Request ID: ${req.id}` });
+
+  if (endsAt) {
+    embed.addFields({ name: "Ends", value: fmtDiscordRelativeTime(endsAt), inline: true });
+  }
+
+  return embed;
 }
 
 // -------------------- Slash command registration --------------------
@@ -401,6 +464,12 @@ async function registerSlashCommands() {
     new SlashCommandBuilder()
       .setName("rules")
       .setDescription("Show the White Flag rules (ephemeral)."),
+    new SlashCommandBuilder()
+      .setName("whiteflags")
+      .setDescription("White Flag utilities.")
+      .addSubcommand((sc) =>
+        sc.setName("active").setDescription("Show all approved + active White Flags.")
+      ),
   ].map((c) => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -438,7 +507,7 @@ bot.once("ready", async () => {
     requests = readJson(REQUESTS_PATH, {});
     const now = Date.now();
     for (const [id, r] of Object.entries(requests)) {
-      if (r.status === "approved" && r.approvedAt && r.approvedAt + SEVEN_DAYS_MS > now) {
+      if (isApprovedAndActive(r, now)) {
         scheduleExpiry(id);
       }
     }
@@ -514,11 +583,11 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            `✅ Setup complete.\n` +
-            `• Rules panel: <#${rulesChannel.id}>\n` +
-            `• Apply panel: <#${applyChannel.id}>\n` +
-            `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
-            `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\n` +
+            `✅ Setup complete.\\n` +
+            `• Rules panel: <#${rulesChannel.id}>\\n` +
+            `• Apply panel: <#${applyChannel.id}>\\n` +
+            `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\\n` +
+            `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\\n` +
             `• Rules gate role: <@&${rulesAcceptedRole.id}>`,
           ephemeral: true,
         });
@@ -530,6 +599,44 @@ bot.on("interactionCreate", async (interaction) => {
           components: [buildRulesRow()],
           ephemeral: true,
         });
+      }
+
+      if (interaction.commandName === "whiteflags" && interaction.options.getSubcommand() === "active") {
+        // Admin-only (admin role or Administrator)
+        const guild = interaction.guild;
+        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+
+        const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+        const isAdminPerm =
+          member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+        const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
+
+        if (!isAdminPerm && !hasAdminRole) {
+          return interaction.reply({ content: "Admins only.", ephemeral: true });
+        }
+
+        requests = readJson(REQUESTS_PATH, {});
+        const now = Date.now();
+        const active = Object.values(requests).filter((r) => isApprovedAndActive(r, now));
+
+        if (active.length === 0) {
+          return interaction.reply({ content: "No active White Flags right now.", ephemeral: true });
+        }
+
+        // Sort by end time soonest
+        active.sort((a, b) => (a.approvedAt + SEVEN_DAYS_MS) - (b.approvedAt + SEVEN_DAYS_MS));
+
+        const lines = active.map((r) => {
+          const endsAt = r.approvedAt + SEVEN_DAYS_MS;
+          const server = escapeMd(r.serverType || r.cluster || "N/A");
+          return `• **${escapeMd(r.tribeName)}** — IGN: **${escapeMd(r.ign)}** — Server: **${server}** — Ends ${fmtDiscordRelativeTime(endsAt)} (ID: \\`${r.id}\\`)`;
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle(`🏳️ Active White Flags (${active.length})`)
+          .setDescription(lines.join("\\n").slice(0, 3900)); // keep under embed limits
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
       }
     }
 
@@ -577,7 +684,7 @@ bot.on("interactionCreate", async (interaction) => {
       }
 
       // Apply open -> show modal (only if rules accepted + no pending request)
-      if (interaction.customId === CID.APPLY_OPEN) {
+      if (interaction.customId === CID.APPLY_OPEN_25 || interaction.customId === CID.APPLY_OPEN_100) {
         if (!interaction.guild) {
           return interaction.reply({ content: "Guild only.", ephemeral: true });
         }
@@ -588,10 +695,10 @@ bot.on("interactionCreate", async (interaction) => {
           });
         }
 
-        // Optional: only allow apply from the configured apply channel
-        // if (state.applyChannelId && interaction.channelId !== state.applyChannelId) {
-        //   return interaction.reply({ content: "Please apply from the application channel.", ephemeral: true });
-        // }
+        const serverType =
+          interaction.customId === CID.APPLY_OPEN_25 ? "25x PVP" : "100x PVP Chaos";
+        const modalId =
+          interaction.customId === CID.APPLY_OPEN_25 ? CID.APPLY_MODAL_25 : CID.APPLY_MODAL_100;
 
         requests = readJson(REQUESTS_PATH, {});
         const pending = getPendingRequestForUser(interaction.user.id);
@@ -615,8 +722,8 @@ bot.on("interactionCreate", async (interaction) => {
         }
 
         const modal = new ModalBuilder()
-          .setCustomId(CID.APPLY_MODAL)
-          .setTitle("White Flag Application");
+          .setCustomId(modalId)
+          .setTitle(`White Flag Application — ${serverType}`);
 
         const ign = new TextInputBuilder()
           .setCustomId("ign")
@@ -632,13 +739,6 @@ bot.on("interactionCreate", async (interaction) => {
           .setRequired(true)
           .setMaxLength(64);
 
-        const cluster = new TextInputBuilder()
-          .setCustomId("cluster")
-          .setLabel("Cluster")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(true)
-          .setMaxLength(64);
-
         const map = new TextInputBuilder()
           .setCustomId("map")
           .setLabel("Map")
@@ -649,7 +749,6 @@ bot.on("interactionCreate", async (interaction) => {
         modal.addComponents(
           new ActionRowBuilder().addComponents(ign),
           new ActionRowBuilder().addComponents(tribe),
-          new ActionRowBuilder().addComponents(cluster),
           new ActionRowBuilder().addComponents(map)
         );
 
@@ -666,7 +765,10 @@ bot.on("interactionCreate", async (interaction) => {
 
         // Optional: enforce that admin actions happen inside admin channel
         if (state.adminChannelId && interaction.channelId !== state.adminChannelId) {
-          return interaction.reply({ content: "Admin actions must be used in the admin review channel.", ephemeral: true });
+          return interaction.reply({
+            content: "Admin actions must be used in the admin review channel.",
+            ephemeral: true,
+          });
         }
 
         // Permission check: must have admin role OR Administrator permission
@@ -692,6 +794,17 @@ bot.on("interactionCreate", async (interaction) => {
         if (interaction.customId.startsWith(CID.ADMIN_APPROVE_PREFIX)) {
           if (req.status !== "pending") {
             return interaction.reply({ content: `Already ${req.status}.`, ephemeral: true });
+          }
+
+          // Enforce one active White Flag per tribe
+          const existingActive = getActiveApprovedForTribe(req.tribeName, requestId);
+          if (existingActive) {
+            return interaction.reply({
+              content:
+                `❌ Cannot approve. Tribe **${escapeMd(req.tribeName)}** already has an active White Flag ` +
+                `(ID: \\`${existingActive.id}\\`) ending ${fmtDiscordRelativeTime(existingActive.approvedAt + SEVEN_DAYS_MS)}.`,
+              ephemeral: true,
+            });
           }
 
           req.status = "approved";
@@ -731,7 +844,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `✅ Your White Flag request for **${req.tribeName}** was approved. Protection lasts 7 days from approval.`
+                `✅ Your White Flag request for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was approved. Protection lasts 7 days from approval.`
               )
               .catch(() => null);
           }
@@ -774,7 +887,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `❌ Your White Flag request for **${req.tribeName}** was denied. If you think this is a mistake, contact an admin.`
+                `❌ Your White Flag request for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was denied. If you think this is a mistake, contact an admin.`
               )
               .catch(() => null);
           }
@@ -811,7 +924,9 @@ bot.on("interactionCreate", async (interaction) => {
             await announceCh.send(
               `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — White Flag ended early for **${escapeMd(
                 req.tribeName
-              )}** (IGN: **${escapeMd(req.ign)}**). A bounty may be placed.`
+              )}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
+                req.serverType || req.cluster || "N/A"
+              )}**). A bounty may be placed.`
             );
           }
 
@@ -834,7 +949,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `🚨 An admin ended your White Flag early for **${req.tribeName}**. Your tribe is now OPEN SEASON.`
+                `🚨 An admin ended your White Flag early for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}). Your tribe is now OPEN SEASON.`
               )
               .catch(() => null);
           }
@@ -846,7 +961,9 @@ bot.on("interactionCreate", async (interaction) => {
 
     // -------------------- Modal submit --------------------
     if (interaction.type === InteractionType.ModalSubmit) {
-      if (interaction.customId !== CID.APPLY_MODAL) return;
+      const is25 = interaction.customId === CID.APPLY_MODAL_25;
+      const is100 = interaction.customId === CID.APPLY_MODAL_100;
+      if (!is25 && !is100) return;
       if (!interaction.guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
 
       if (!state.adminChannelId || !state.adminRoleId) {
@@ -855,6 +972,8 @@ bot.on("interactionCreate", async (interaction) => {
           ephemeral: true,
         });
       }
+
+      const serverType = is25 ? "25x PVP" : "100x PVP Chaos";
 
       // Re-check rules role gate
       const member = await interaction.guild.members
@@ -869,10 +988,9 @@ bot.on("interactionCreate", async (interaction) => {
 
       const ign = interaction.fields.getTextInputValue("ign")?.trim();
       const tribe = interaction.fields.getTextInputValue("tribe")?.trim();
-      const cluster = interaction.fields.getTextInputValue("cluster")?.trim();
       const map = interaction.fields.getTextInputValue("map")?.trim();
 
-      if (!ign || !tribe || !cluster || !map) {
+      if (!ign || !tribe || !map) {
         return interaction.reply({ content: "All fields are required.", ephemeral: true });
       }
 
@@ -886,13 +1004,25 @@ bot.on("interactionCreate", async (interaction) => {
         });
       }
 
+      // Enforce one active White Flag per tribe (block submission too)
+      const existingActive = getActiveApprovedForTribe(tribe);
+      if (existingActive) {
+        return interaction.reply({
+          content:
+            `❌ That tribe already has an active White Flag (ID: \\`${existingActive.id}\\`) ` +
+            `ending ${fmtDiscordRelativeTime(existingActive.approvedAt + SEVEN_DAYS_MS)}.`,
+          ephemeral: true,
+        });
+      }
+
       const requestId = newRequestId();
       const req = {
         id: requestId,
         status: "pending",
         ign,
         tribeName: tribe,
-        cluster,
+        cluster: serverType,   // kept for backwards compatibility with older data
+        serverType,            // explicit
         map,
         requestedBy: interaction.user.id,
         requestedAt: Date.now(),
@@ -928,7 +1058,7 @@ bot.on("interactionCreate", async (interaction) => {
       });
 
       return interaction.reply({
-        content: "✅ Submitted! Admins have been notified.",
+        content: `✅ Submitted for **${serverType}**! Admins have been notified.`,
         ephemeral: true,
       });
     }
