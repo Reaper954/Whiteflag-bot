@@ -76,6 +76,12 @@ const commands = [
     .addSubcommand((sc) =>
       sc.setName("active").setDescription("Show all approved + active White Flags.")
     ),
+  new SlashCommandBuilder()
+    .setName("bounties")
+    .setDescription("Bounty utilities.")
+    .addSubcommand((sc) =>
+      sc.setName("active").setDescription("Show all active bounties (2 weeks).")
+    ),
 ].map((c) => c.toJSON());
 
 const rest = new REST({ version: "10" }).setToken(TOKEN);

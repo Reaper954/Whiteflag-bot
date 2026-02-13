@@ -120,6 +120,8 @@ let requests = readJson(REQUESTS_PATH, {});
 
 // Active timers in memory: requestId -> timeout
 const activeTimeouts = new Map();
+// Active bounty timers in memory: requestId -> timeout
+const activeBountyTimeouts = new Map();
 
 // -------------------- Constants for custom IDs --------------------
 const CID = {
@@ -138,6 +140,8 @@ const CID = {
 
 // 7 days in ms
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+// 2 weeks in ms
+const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
 // -------------------- Helpers --------------------
 function persist() {
@@ -288,6 +292,80 @@ function scheduleExpiry(requestId) {
 
   activeTimeouts.set(requestId, t);
 }
+// -------------------- Bounty lifecycle (2 weeks) --------------------
+function hasActiveBounty(req, now = Date.now()) {
+  return (
+    req &&
+    req.bounty &&
+    req.bounty.active === true &&
+    typeof req.bounty.endsAt === "number" &&
+    req.bounty.endsAt > now
+  );
+}
+
+function scheduleBountyExpiry(requestId) {
+  const req = requests[requestId];
+  if (!req || !hasActiveBounty(req)) return;
+
+  const existing = activeBountyTimeouts.get(requestId);
+  if (existing) clearTimeout(existing);
+
+  const now = Date.now();
+  const delay = Math.max(0, req.bounty.endsAt - now);
+
+  const t = setTimeout(async () => {
+    try {
+      requests = readJson(REQUESTS_PATH, {});
+      const r = requests[requestId];
+      if (!r || !r.bounty) return;
+
+      const now2 = Date.now();
+      if (!(r.bounty.active && typeof r.bounty.endsAt === "number" && r.bounty.endsAt <= now2)) return;
+
+      r.bounty.active = false;
+      r.bounty.expiredAt = now2;
+      requests[requestId] = r;
+      persist();
+
+      const guild = await safeFetchGuild(bot);
+      if (!guild) return;
+
+      const announceCh = await safeFetchChannel(guild, state.announceChannelId);
+      if (announceCh && isTextChannel(announceCh)) {
+        await announceCh.send(
+          `🏁 **BOUNTY EXPIRED** — Bounty ended for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
+            r.ign
+          )}**, Server: **${escapeMd(r.serverType || r.cluster || "N/A")}**).`
+        );
+      }
+    } finally {
+      activeBountyTimeouts.delete(requestId);
+    }
+  }, delay);
+
+  activeBountyTimeouts.set(requestId, t);
+}
+
+async function expireOverdueBountiesOnStartup() {
+  try {
+    requests = readJson(REQUESTS_PATH, {});
+    const now = Date.now();
+
+    let changed = false;
+    for (const [id, r] of Object.entries(requests)) {
+      if (r?.bounty?.active && typeof r.bounty.endsAt === "number" && r.bounty.endsAt <= now) {
+        r.bounty.active = false;
+        r.bounty.expiredAt = now;
+        requests[id] = r;
+        changed = true;
+      }
+    }
+    if (changed) persist();
+  } catch (e) {
+    console.error("Failed to expire overdue bounties:", e);
+  }
+}
+
 
 async function expireOverdueApprovalsOnStartup() {
   // If bot was down past the expiry time, mark them expired so they don't stay "approved" forever.
@@ -352,7 +430,7 @@ function buildRulesEmbed() {
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection (scouting for raids, feeding intel, etc.) = **removal**.",
         "• Admin discretion may apply additional penalties.",
-        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty will be placed on your tribe.",
+        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty may be placed.",
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
@@ -470,6 +548,12 @@ async function registerSlashCommands() {
       .addSubcommand((sc) =>
         sc.setName("active").setDescription("Show all approved + active White Flags.")
       ),
+    new SlashCommandBuilder()
+      .setName("bounties")
+      .setDescription("Bounty utilities.")
+      .addSubcommand((sc) =>
+        sc.setName("active").setDescription("Show all active bounties (2 weeks).")
+      ),
   ].map((c) => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -493,7 +577,7 @@ const bot = new Client({
   partials: [Partials.GuildMember],
 });
 
-bot.once("ready", async () => {
+bot.once("clientReady", async () => {
   console.log(`✅ Logged in as ${bot.user.tag}`);
 
   // Register slash commands (safe to do on startup)
@@ -501,6 +585,7 @@ bot.once("ready", async () => {
 
   // Expire overdue approvals (if bot was offline)
   await expireOverdueApprovalsOnStartup();
+  await expireOverdueBountiesOnStartup();
 
   // Re-schedule timers after restart
   try {
@@ -509,6 +594,9 @@ bot.once("ready", async () => {
     for (const [id, r] of Object.entries(requests)) {
       if (isApprovedAndActive(r, now)) {
         scheduleExpiry(id);
+      }
+      if (hasActiveBounty(r, now)) {
+        scheduleBountyExpiry(id);
       }
     }
   } catch (e) {
@@ -639,6 +727,41 @@ bot.on("interactionCreate", async (interaction) => {
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
     }
+      if (interaction.commandName === "bounties" && interaction.options.getSubcommand() === "active") {
+        const guild = interaction.guild;
+        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+
+        const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+        const isAdminPerm =
+          member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+        const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
+
+        if (!isAdminPerm && !hasAdminRole) {
+          return interaction.reply({ content: "Admins only.", ephemeral: true });
+        }
+
+        requests = readJson(REQUESTS_PATH, {});
+        const now = Date.now();
+        const active = Object.values(requests).filter((r) => hasActiveBounty(r, now));
+
+        if (active.length === 0) {
+          return interaction.reply({ content: "No active bounties right now.", ephemeral: true });
+        }
+
+        active.sort((a, b) => a.bounty.endsAt - b.bounty.endsAt);
+
+        const lines = active.map((r) => {
+          const server = escapeMd(r.serverType || r.cluster || "N/A");
+          return `• **${escapeMd(r.tribeName)}** — IGN: **${escapeMd(r.ign)}** — Server: **${server}** — Ends ${fmtDiscordRelativeTime(r.bounty.endsAt)} (ID: \`${r.id}\`)`;
+        });
+
+        const embed = new EmbedBuilder()
+          .setTitle(`🎯 Active Bounties (${active.length})`)
+          .setDescription(lines.join("\n").slice(0, 3900));
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+
 
     // -------------------- Buttons --------------------
     if (interaction.isButton()) {
@@ -915,6 +1038,8 @@ bot.on("interactionCreate", async (interaction) => {
           requests[requestId] = req;
           persist();
 
+          scheduleBountyExpiry(requestId);
+
           // Announce Open Season (ping role)
           const announceCh = await interaction.guild.channels
             .fetch(state.announceChannelId)
@@ -926,7 +1051,7 @@ bot.on("interactionCreate", async (interaction) => {
                 req.tribeName
               )}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
                 req.serverType || req.cluster || "N/A"
-              )}**). A bounty may be placed.`
+              )}**). 🎯 **BOUNTY ACTIVE** for 2 weeks — ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
             );
           }
 
