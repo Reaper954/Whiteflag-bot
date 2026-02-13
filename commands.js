@@ -1,81 +1,92 @@
 // commands.js
-// Registers slash commands for the bot (Discord.js v14).
-// Run: node commands.js
-// Env needed: DISCORD_TOKEN, CLIENT_ID, GUILD_ID
+// Slash command deploy script for the White Flag bot (Discord.js v14).
+//
+// Use this if you prefer registering commands separately from index.js.
+//
+// Env:
+//   DISCORD_TOKEN (required)
+//   CLIENT_ID    (required) - your application's client id
+//   GUILD_ID     (optional) - if set, registers to that guild instantly; otherwise registers globally
+//
+// Run:
+//   node commands.js
+//
+// Notes:
+// - Global command updates can take up to ~1 hour to appear in Discord.
+// - /setup is still guarded in the bot code to require Administrator.
 
 require("dotenv").config();
-const { REST, Routes } = require("discord.js");
+const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 
-const token = process.env.DISCORD_TOKEN;
-const clientId = process.env.CLIENT_ID;
-const guildId = process.env.GUILD_ID;
+const TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID || null;
 
-if (!token || !clientId || !guildId) {
-  console.error("Missing env vars. Need DISCORD_TOKEN, CLIENT_ID, GUILD_ID");
+if (!TOKEN || !CLIENT_ID) {
+  console.error("Missing env vars. Need DISCORD_TOKEN and CLIENT_ID. (GUILD_ID is optional)");
   process.exit(1);
 }
 
 const commands = [
-  {
-    name: "setup",
-    description: "Admin: posts the rules + application panels",
-    default_member_permissions: "0", // admin only by permissions in server; still guarded in code
-    options: [
-      {
-        name: "rules_channel",
-        description: "Channel to post the rules panel",
-        type: 7, // CHANNEL
-        required: true,
-      },
-      {
-        name: "apply_channel",
-        description: "Channel to post the application panel",
-        type: 7, // CHANNEL
-        required: true,
-      },
-      {
-        name: "admin_channel",
-        description: "Channel to send admin review requests",
-        type: 7, // CHANNEL
-        required: true,
-      },
-      {
-        name: "admin_role",
-        description: "Role to ping when a whiteflag is submitted",
-        type: 8, // ROLE
-        required: true,
-      },
-      {
-        name: "open_season_role",
-        description: "Role to ping when an admin ends a whiteflag early",
-        type: 8, // ROLE
-        required: true,
-      },
-      {
-        name: "announce_channel",
-        description: "Channel to announce Open Season (early end only)",
-        type: 7, // CHANNEL
-        required: true,
-      },
-    ],
-  },
-  {
-    name: "rules",
-    description: "Show White Flag rules",
-  },
-];
+  new SlashCommandBuilder()
+    .setName("setup")
+    .setDescription("Post rules + apply panels and configure channels/roles for White Flag.")
+    .addChannelOption((opt) =>
+      opt
+        .setName("rules_channel")
+        .setDescription("Channel to post the rules panel")
+        .setRequired(true)
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("apply_channel")
+        .setDescription("Channel to post the application panel")
+        .setRequired(true)
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("admin_channel")
+        .setDescription("Channel where admin reviews go")
+        .setRequired(true)
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("announce_channel")
+        .setDescription("Channel to announce OPEN SEASON pings")
+        .setRequired(true)
+    )
+    .addRoleOption((opt) =>
+      opt
+        .setName("admin_role")
+        .setDescription("Role to ping for new applications")
+        .setRequired(true)
+    )
+    .addRoleOption((opt) =>
+      opt
+        .setName("open_season_role")
+        .setDescription("Role to ping when ending early (OPEN SEASON)")
+        .setRequired(true)
+    ),
+  new SlashCommandBuilder()
+    .setName("rules")
+    .setDescription("Show the White Flag rules (ephemeral)."),
+].map((c) => c.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(token);
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
   try {
     console.log("Registering slash commands...");
-    await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
-      body: commands,
-    });
-    console.log("✅ Commands registered.");
+
+    if (GUILD_ID) {
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+      console.log(`✅ Commands registered to guild ${GUILD_ID}`);
+    } else {
+      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
+      console.log("✅ Commands registered globally (can take up to ~1 hour to appear).");
+    }
   } catch (err) {
-    console.error(err);
+    console.error("❌ Failed to register commands:", err);
     process.exit(1);
   }
 })();
