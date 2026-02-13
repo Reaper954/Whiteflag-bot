@@ -352,7 +352,7 @@ function buildRulesEmbed() {
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection (scouting for raids, feeding intel, etc.) = **removal**.",
         "• Admin discretion may apply additional penalties.",
-        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty may be placed.",
+        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty will be placed on your tribe.",
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
