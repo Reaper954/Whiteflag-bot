@@ -356,7 +356,7 @@ function buildRulesEmbed() {
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
-      ].join("\\n")
+      ].join("\n")
     );
 }
 
@@ -381,7 +381,7 @@ function buildApplyEmbed() {
         "• **100x PVP Chaos**",
         "",
         "**Important:** Only **1 active White Flag per tribe** is allowed.",
-      ].join("\\n")
+      ].join("\n")
     );
 }
 
@@ -583,11 +583,11 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            `✅ Setup complete.\\n` +
-            `• Rules panel: <#${rulesChannel.id}>\\n` +
-            `• Apply panel: <#${applyChannel.id}>\\n` +
-            `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\\n` +
-            `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\\n` +
+            `✅ Setup complete.\n` +
+            `• Rules panel: <#${rulesChannel.id}>\n` +
+            `• Apply panel: <#${applyChannel.id}>\n` +
+            `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
+            `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\n` +
             `• Rules gate role: <@&${rulesAcceptedRole.id}>`,
           ephemeral: true,
         });
@@ -634,7 +634,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         const embed = new EmbedBuilder()
           .setTitle(`🏳️ Active White Flags (${active.length})`)
-          .setDescription(lines.join("\\n").slice(0, 3900)); // keep under embed limits
+          .setDescription(lines.join("\n").slice(0, 3900)); // keep under embed limits
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
       }
