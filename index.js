@@ -1035,6 +1035,16 @@ bot.on("interactionCreate", async (interaction) => {
           req.status = "ended_early";
           req.endedEarlyAt = Date.now();
           req.endedEarlyBy = interaction.user.id;
+
+          // Start/refresh a 2-week bounty automatically
+          const nowB = Date.now();
+          req.bounty = {
+            active: true,
+            startedAt: nowB,
+            endsAt: nowB + TWO_WEEKS_MS,
+            startedBy: interaction.user.id,
+            reason: "White Flag ended early (Open Season).",
+          };
           requests[requestId] = req;
           persist();
 
