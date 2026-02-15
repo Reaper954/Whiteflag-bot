@@ -382,6 +382,28 @@ async function expireOverdueBountiesOnStartup() {
   }
 }
 
+
+async function scheduleTestAlertsOnStartup() {
+  if (!isTestMode()) return;
+  try {
+    requests = readJson(REQUESTS_PATH, {});
+    const now = Date.now();
+    for (const [id, r] of Object.entries(requests)) {
+      if (isApprovedAndActive(r, now)) {
+        const endsAt = r.approvedAt ? r.approvedAt + SEVEN_DAYS_MS : null;
+        const warnAt = endsAt ? endsAt - 24 * 60 * 60 * 1000 : null;
+        maybeSendTestAlert({ kind: "whiteflag", requestId: id, req: r, realWarnAt: warnAt });
+      }
+      if (hasActiveBounty(r, now)) {
+        const warnAt = r.bounty?.endsAt ? r.bounty.endsAt - 24 * 60 * 60 * 1000 : null;
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: warnAt });
+      }
+    }
+  } catch (_e) {
+    // ignore
+  }
+}
+
 // -------------------- Expiration warnings (24h prior) --------------------
 function isApprovedAndActiveWithEnds(req, now = Date.now()) {
   if (!req || req.status !== "approved" || !req.approvedAt) return null;
@@ -535,10 +557,10 @@ async function expireOverdueApprovalsOnStartup() {
 // -------------------- Rules / Apply panels --------------------
 function buildRulesEmbed() {
   return new EmbedBuilder()
-    .setTitle("🛡️White Flag Protocol🛡️")
+    .setTitle("🛡️ EXODUS OVERSEER — White Flag Protocol")
     .setDescription(
       [
-        "This system grants temporary protection to new tribes. Abuse will trigger enforcement action and will result in an active bounty.",
+        "**EXODUS OVERSEER PROTOCOL:** This system grants temporary protection to new tribes. Abuse will trigger enforcement action and will result in an active bounty.",
         "",
         "**Eligibility & Duration**",
         "• White Flag is intended for **new tribes only**.",
@@ -577,7 +599,7 @@ function buildRulesRow() {
 
 function buildApplyEmbed() {
   return new EmbedBuilder()
-    .setTitle("White Flag Applications")
+    .setTitle("🛡️ EXODUS OVERSEER — White Flag Applications")
     .setDescription(
       [
         "Before applying, you must read and accept the rules.",
@@ -608,7 +630,7 @@ function buildAdminReviewEmbed(req) {
   const endsAt = req?.approvedAt ? req.approvedAt + SEVEN_DAYS_MS : null;
 
   const embed = new EmbedBuilder()
-    .setTitle(" Application Received")
+    .setTitle("🛡️ EXODUS OVERSEER — Application Received")
     .addFields(
       { name: "Server", value: escapeMd(req.serverType || req.cluster || "N/A"), inline: true },
       { name: "IGN", value: escapeMd(req.ign), inline: true },
@@ -745,6 +767,7 @@ bot.once("clientReady", async () => {
   // Expire overdue approvals (if bot was offline)
   await expireOverdueApprovalsOnStartup();
   await expireOverdueBountiesOnStartup();
+  await scheduleTestAlertsOnStartup();
 
   // Re-schedule timers after restart
   try {
@@ -832,7 +855,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            `Setup complete.\n` +
+            `🛡️ **EXODUS OVERSEER:** Setup complete.\n` +
             `• Rules panel: <#${rulesChannel.id}>\n` +
             `• Apply panel: <#${applyChannel.id}>\n` +
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
@@ -882,7 +905,7 @@ bot.on("interactionCreate", async (interaction) => {
         });
 
         const embed = new EmbedBuilder()
-          .setTitle(`Active White Flags (${active.length})`)
+          .setTitle(`🛡️ EXODUS OVERSEER — Active White Flags (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900)); // keep under embed limits
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -917,7 +940,7 @@ bot.on("interactionCreate", async (interaction) => {
         });
 
         const embed = new EmbedBuilder()
-          .setTitle(`Active Bounties (${active.length})`)
+          .setTitle(`🛡️ EXODUS OVERSEER — Active Bounties (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900));
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1110,7 +1133,7 @@ bot.on("interactionCreate", async (interaction) => {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle(`Tribe Status — ${escapeMd(tribe)}`)
+            .setTitle(`🛡️ EXODUS OVERSEER — Tribe Status — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n"));
 
           return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1142,7 +1165,7 @@ bot.on("interactionCreate", async (interaction) => {
           });
 
           const embed = new EmbedBuilder()
-            .setTitle(`Tribe History — ${escapeMd(tribe)}`)
+            .setTitle(`🛡️ EXODUS OVERSEER — Tribe History — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n").slice(0, 3900));
 
           return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1355,7 +1378,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `White Flag APPROVED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was approved. Protection lasts 7 days from approval.`
+                `🛡️ EXODUS OVERSEER: White Flag APPROVED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was approved. Protection lasts 7 days from approval.`
               )
               .catch(() => null);
           }
@@ -1398,7 +1421,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `White Flag DENIED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was denied. If you think this is a mistake, contact an admin.`
+                `🛡️ EXODUS OVERSEER: White Flag DENIED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was denied. If you think this is a mistake, contact an admin.`
               )
               .catch(() => null);
           }
@@ -1470,7 +1493,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `Protection TERMINATED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}). Your tribe will now be hunted.`
+                `🛡️ EXODUS OVERSEER: Protection TERMINATED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}). Your tribe is now OPEN SEASON.`
               )
               .catch(() => null);
           }
