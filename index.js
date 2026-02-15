@@ -422,7 +422,7 @@ function buildRulesEmbed() {
     .setTitle("🛡️ EXODUS OVERSEER — White Flag Protocol")
     .setDescription(
       [
-        "**EXODUS OVERSEER PROTOCOL:** This system grants temporary protection to new tribes. Abuse will trigger enforcement action and may result in an active bounty.",
+        "**EXODUS OVERSEER PROTOCOL:** This system grants temporary protection to new tribes. Abuse will trigger enforcement action and will result in an active bounty.",
         "",
         "**Eligibility & Duration**",
         "• White Flag is intended for **new tribes only**.",
@@ -442,7 +442,7 @@ function buildRulesEmbed() {
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection (scouting for raids, feeding intel, etc.) = **removal**.",
         "• Admin discretion may apply additional penalties.",
-        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty may be placed.",
+        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty will be placed.",
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
@@ -470,7 +470,7 @@ function buildApplyEmbed() {
         "• **25x PVP**",
         "• **100x PVP Chaos**",
         "",
-        "**Important:** Only **1 active White Flag per tribe** is allowed.",
+        "**Important:** Only **1 White Flag per tribe.**",
       ].join("\n")
     );
 }
