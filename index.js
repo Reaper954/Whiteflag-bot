@@ -292,7 +292,7 @@ function scheduleExpiry(requestId) {
       const adminCh = await safeFetchChannel(guild, state.adminChannelId);
       if (adminCh && isTextChannel(adminCh)) {
         await adminCh.send(
-          `⏳ White Flag expired for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
+          `⏳ PROTECTION EXPIRED — White Flag ended for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
             r.ign
           )}**, Server: **${escapeMd(r.serverType || r.cluster || "N/A")}**).`
         );
@@ -345,7 +345,7 @@ function scheduleBountyExpiry(requestId) {
       const announceCh = await safeFetchChannel(guild, state.announceChannelId);
       if (announceCh && isTextChannel(announceCh)) {
         await announceCh.send(
-          `🏁 **BOUNTY EXPIRED** — Bounty ended for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
+          `🏁 **BOUNTY CLOSED** — Target cleared for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
             r.ign
           )}**, Server: **${escapeMd(r.serverType || r.cluster || "N/A")}**).`
         );
@@ -400,7 +400,7 @@ async function expireOverdueApprovalsOnStartup() {
 
           if (adminCh && isTextChannel(adminCh)) {
             await adminCh.send(
-              `⏳ White Flag expired (while bot was offline) for **${escapeMd(
+              `⏳ PROTECTION EXPIRED (offline) — White Flag ended for **${escapeMd(
                 r.tribeName
               )}** (IGN: **${escapeMd(r.ign)}**, Server: **${escapeMd(
                 r.serverType || r.cluster || "N/A"
@@ -419,10 +419,10 @@ async function expireOverdueApprovalsOnStartup() {
 // -------------------- Rules / Apply panels --------------------
 function buildRulesEmbed() {
   return new EmbedBuilder()
-    .setTitle("📜 White Flag Rules & Agreement")
+    .setTitle("🛡️ EXODUS OVERSEER — White Flag Protocol")
     .setDescription(
       [
-        "The White Flag system is designed to give new tribes a fair start and time to build. Abuse of this system will result in removal and a bounty placed on your tribe’s head.",
+        "**EXODUS OVERSEER PROTOCOL:** This system grants temporary protection to new tribes. Abuse will trigger enforcement action and will result in an active bounty.",
         "",
         "**Eligibility & Duration**",
         "• White Flag is intended for **new tribes only**.",
@@ -442,7 +442,7 @@ function buildRulesEmbed() {
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection (scouting for raids, feeding intel, etc.) = **removal**.",
         "• Admin discretion may apply additional penalties.",
-        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty may be placed.",
+        "• If you break the rules, your flag will be removed, your tribe will be announced as **OPEN SEASON**, and a bounty will be placed.",
         "",
         "**After Expiration**",
         "Once your White Flag expires your tribe is fully open to normal PvP rules.",
@@ -461,7 +461,7 @@ function buildRulesRow() {
 
 function buildApplyEmbed() {
   return new EmbedBuilder()
-    .setTitle("🏳️ White Flag Applications")
+    .setTitle("🛡️ EXODUS OVERSEER — White Flag Applications")
     .setDescription(
       [
         "Before applying, you must read and accept the rules.",
@@ -470,7 +470,7 @@ function buildApplyEmbed() {
         "• **25x PVP**",
         "• **100x PVP Chaos**",
         "",
-        "**Important:** Only **1 active White Flag per tribe** is allowed.",
+        "**Important:** Only **1 White Flag per tribe**",
       ].join("\n")
     );
 }
@@ -492,7 +492,7 @@ function buildAdminReviewEmbed(req) {
   const endsAt = req?.approvedAt ? req.approvedAt + SEVEN_DAYS_MS : null;
 
   const embed = new EmbedBuilder()
-    .setTitle("📥 New White Flag Application")
+    .setTitle("🛡️ EXODUS OVERSEER — Application Received")
     .addFields(
       { name: "Server", value: escapeMd(req.serverType || req.cluster || "N/A"), inline: true },
       { name: "IGN", value: escapeMd(req.ign), inline: true },
@@ -714,7 +714,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            `✅ Setup complete.\n` +
+            `🛡️ **EXODUS OVERSEER:** Setup complete.\n` +
             `• Rules panel: <#${rulesChannel.id}>\n` +
             `• Apply panel: <#${applyChannel.id}>\n` +
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
@@ -764,7 +764,7 @@ bot.on("interactionCreate", async (interaction) => {
         });
 
         const embed = new EmbedBuilder()
-          .setTitle(`🏳️ Active White Flags (${active.length})`)
+          .setTitle(`🛡️ EXODUS OVERSEER — Active White Flags (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900)); // keep under embed limits
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -799,7 +799,7 @@ bot.on("interactionCreate", async (interaction) => {
         });
 
         const embed = new EmbedBuilder()
-          .setTitle(`🎯 Active Bounties (${active.length})`)
+          .setTitle(`🛡️ EXODUS OVERSEER — Active Bounties (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900));
 
         return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -852,7 +852,7 @@ bot.on("interactionCreate", async (interaction) => {
 
             return interaction.reply({
               content:
-                `✅ Refreshed bounty for **${escapeMd(tribe)}**. Ends ${fmtDiscordRelativeTime(existing.bounty.endsAt)} (ID: \`${existing.id}\`).`,
+                `🛡️ **EXODUS OVERSEER:** Bounty refreshed for **${escapeMd(tribe)}**. Ends ${fmtDiscordRelativeTime(existing.bounty.endsAt)} (ID: \`${existing.id}\`).`,
               ephemeral: true,
             });
           }
@@ -883,7 +883,7 @@ bot.on("interactionCreate", async (interaction) => {
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
-              `🎯 **BOUNTY ACTIVE** — **${escapeMd(record.tribeName)}** (IGN: **${escapeMd(
+              `🎯 **BOUNTY ISSUED** — **${escapeMd(record.tribeName)}** (IGN: **${escapeMd(
                 record.ign
               )}**, Server: **${escapeMd(record.serverType)}**) — ends ${fmtDiscordRelativeTime(
                 record.bounty.endsAt
@@ -893,7 +893,7 @@ bot.on("interactionCreate", async (interaction) => {
 
           return interaction.reply({
             content:
-              `✅ Bounty added for **${escapeMd(record.tribeName)}**. Ends ${fmtDiscordRelativeTime(record.bounty.endsAt)} (ID: \`${id}\`).`,
+              `🛡️ **EXODUS OVERSEER:** Bounty issued for **${escapeMd(record.tribeName)}**. Ends ${fmtDiscordRelativeTime(record.bounty.endsAt)} (ID: \`${id}\`).`,
             ephemeral: true,
           });
         }
@@ -931,12 +931,12 @@ bot.on("interactionCreate", async (interaction) => {
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
-              `🛑 **BOUNTY REMOVED** — **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`
+              `🛑 **BOUNTY CANCELED** — **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`
             );
           }
 
           return interaction.reply({
-            content: `✅ Removed bounty for **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`,
+            content: `🛡️ **EXODUS OVERSEER:** Bounty canceled for **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`,
             ephemeral: true,
           });
         }
@@ -990,7 +990,7 @@ bot.on("interactionCreate", async (interaction) => {
           }
 
           const embed = new EmbedBuilder()
-            .setTitle(`🔎 Tribe Status — ${escapeMd(tribe)}`)
+            .setTitle(`🛡️ EXODUS OVERSEER — Tribe Status — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n"));
 
           return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1022,7 +1022,7 @@ bot.on("interactionCreate", async (interaction) => {
           });
 
           const embed = new EmbedBuilder()
-            .setTitle(`📚 Tribe History — ${escapeMd(tribe)}`)
+            .setTitle(`🛡️ EXODUS OVERSEER — Tribe History — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n").slice(0, 3900));
 
           return interaction.reply({ embeds: [embed], ephemeral: true });
@@ -1061,14 +1061,14 @@ bot.on("interactionCreate", async (interaction) => {
 
         if (member.roles.cache.has(role.id)) {
           return interaction.reply({
-            content: "✅ You already accepted the rules. You can apply now.",
+            content: "🛡️ **EXODUS OVERSEER:** Rules already acknowledged. You may apply.",
             ephemeral: true,
           });
         }
 
         await member.roles.add(role, "Accepted White Flag rules").catch(() => null);
         return interaction.reply({
-          content: "✅ Thanks. You can now submit a White Flag application.",
+          content: "🛡️ **EXODUS OVERSEER:** Rules acknowledged. You may submit an application.",
           ephemeral: true,
         });
       }
@@ -1234,7 +1234,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `✅ Your White Flag request for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was approved. Protection lasts 7 days from approval.`
+                `🛡️ EXODUS OVERSEER: White Flag APPROVED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was approved. Protection lasts 7 days from approval.`
               )
               .catch(() => null);
           }
@@ -1277,7 +1277,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `❌ Your White Flag request for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was denied. If you think this is a mistake, contact an admin.`
+                `🛡️ EXODUS OVERSEER: White Flag DENIED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}) was denied. If you think this is a mistake, contact an admin.`
               )
               .catch(() => null);
           }
@@ -1324,11 +1324,8 @@ bot.on("interactionCreate", async (interaction) => {
 
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
-              `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — White Flag ended early for **${escapeMd(
-                req.tribeName
-              )}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
-                req.serverType || req.cluster || "N/A"
-              )}**). 🎯 **BOUNTY ACTIVE** for 2 weeks — ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
+              `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — Protection TERMINATED for **${escapeMd(req.tribeName)}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(req.serverType || req.cluster || "N/A")}**).
+🎯 **BOUNTY ISSUED** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
             );
           }
 
@@ -1351,7 +1348,7 @@ bot.on("interactionCreate", async (interaction) => {
           if (user) {
             user
               .send(
-                `🚨 An admin ended your White Flag early for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}). Your tribe is now OPEN SEASON.`
+                `🛡️ EXODUS OVERSEER: Protection TERMINATED for **${req.tribeName}** (${req.serverType || req.cluster || "Server"}). Your tribe is now OPEN SEASON.`
               )
               .catch(() => null);
           }
@@ -1460,7 +1457,7 @@ bot.on("interactionCreate", async (interaction) => {
       });
 
       return interaction.reply({
-        content: `✅ Submitted for **${serverType}**! Admins have been notified.`,
+        content: `🛡️ **EXODUS OVERSEER:** Application submitted for **${serverType}**! Admins have been notified.`,
         ephemeral: true,
       });
     }
