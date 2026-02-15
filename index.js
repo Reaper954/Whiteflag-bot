@@ -147,6 +147,64 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // 2 weeks in ms
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
+// -------------------- Expiration alert test mode --------------------
+// Set ALERT_TEST_MINUTES (e.g. 2) to send a quick test alert after approvals/bounties, and on startup for active records.
+// Test alerts do NOT consume the real 24-hour warning (they use separate flags on the record).
+const ALERT_TEST_MINUTES = Number(process.env.ALERT_TEST_MINUTES || 0);
+const ALERT_TEST_MS = Number.isFinite(ALERT_TEST_MINUTES) && ALERT_TEST_MINUTES > 0 ? ALERT_TEST_MINUTES * 60 * 1000 : 0;
+function isTestMode() {
+  return Number.isFinite(ALERT_TEST_MINUTES) && ALERT_TEST_MINUTES > 0;
+}
+if (isTestMode()) {
+  console.log(`🧪 ALERT TEST MODE enabled: ${ALERT_TEST_MINUTES} minute(s)`);
+}
+
+async function maybeSendTestAlert({ kind, requestId, req, realWarnAt }) {
+  if (!isTestMode()) return;
+  if (!requestId || !req) return;
+
+  const flagKey = kind === "whiteflag" ? "wfTestWarnedAt" : "bountyTestWarnedAt";
+  if (req[flagKey]) return;
+
+  setTimeout(async () => {
+    try {
+      requests = readJson(REQUESTS_PATH, {});
+      const r = requests[requestId];
+      if (!r) return;
+      if (r[flagKey]) return;
+
+      const now = Date.now();
+      if (kind === "whiteflag") {
+        if (!isApprovedAndActive(r, now)) return;
+      } else {
+        if (!hasActiveBounty(r, now)) return;
+      }
+
+      r[flagKey] = now;
+      requests[requestId] = r;
+      persist();
+
+      const guild = await safeFetchGuild(bot);
+      if (!guild) return;
+      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      if (!adminCh || !isTextChannel(adminCh)) return;
+
+      const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
+      const label = kind === "whiteflag" ? "WHITE FLAG" : "BOUNTY";
+      const endsAt = kind === "whiteflag" ? (r.approvedAt ? r.approvedAt + SEVEN_DAYS_MS : null) : (r.bounty?.endsAt ?? null);
+
+      await adminCh.send(
+        `${ping}🧪 **[TEST MODE] EXODUS OVERSEER** — ${label} warning test for **${escapeMd(
+          r.tribeName
+        )}** (ID: \`${r.id}\`).\n` +
+          `Real 24h warning would be at ${realWarnAt ? fmtDiscordRelativeTime(realWarnAt) : "N/A"}; expires ${endsAt ? fmtDiscordRelativeTime(endsAt) : "N/A"}.`
+      );
+    } catch (_e) {
+      // ignore
+    }
+  }, ALERT_TEST_MS);
+}
+
 // -------------------- Helpers --------------------
 function persist() {
   writeJson(STATE_PATH, state);
@@ -378,7 +436,7 @@ async function expireOverdueBountiesOnStartup() {
     }
     if (changed) persist();
   } catch (_e) {
-    console.error("Failed to expire overdue bounties:", e);
+    console.error("Failed to expire overdue bounties:", _e);
   }
 }
 
@@ -456,7 +514,7 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
     } catch (_e) {
-      console.error("White Flag warning failed:", e);
+      console.error("White Flag warning failed:", _e);
     } finally {
       activeWfAlertTimeouts.delete(requestId);
     }
@@ -507,7 +565,7 @@ function scheduleBountyExpiryWarning(requestId) {
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
     } catch (_e) {
-      console.error("Bounty warning failed:", e);
+      console.error("Bounty warning failed:", _e);
     } finally {
       activeBountyAlertTimeouts.delete(requestId);
     }
@@ -551,7 +609,7 @@ async function expireOverdueApprovalsOnStartup() {
     }
     if (changed) persist();
   } catch (_e) {
-    console.error("Failed to expire overdue approvals:", e);
+    console.error("Failed to expire overdue approvals:", _e);
   }
 }
 
@@ -749,7 +807,7 @@ async function registerSlashCommands() {
       console.log("✅ Registered global slash commands (can take up to ~1 hour to appear).");
     }
   } catch (_e) {
-    console.error("Failed to register slash commands:", e);
+    console.error("Failed to register slash commands:", _e);
   }
 }
 
@@ -785,7 +843,7 @@ bot.once("clientReady", async () => {
       }
     }
   } catch (_e) {
-    console.error("Failed to reschedule timers:", e);
+    console.error("Failed to reschedule timers:", _e);
   }
 });
 
