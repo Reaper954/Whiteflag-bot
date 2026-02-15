@@ -122,6 +122,9 @@ let requests = readJson(REQUESTS_PATH, {});
 const activeTimeouts = new Map();
 // Active bounty timers in memory: requestId -> timeout
 const activeBountyTimeouts = new Map();
+// Active warning timers (24h prior): requestId -> timeout
+const activeWfAlertTimeouts = new Map();
+const activeBountyAlertTimeouts = new Map();
 
 // -------------------- Constants for custom IDs --------------------
 const CID = {
@@ -140,6 +143,7 @@ const CID = {
 
 // 7 days in ms
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // 2 weeks in ms
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -377,6 +381,118 @@ async function expireOverdueBountiesOnStartup() {
     console.error("Failed to expire overdue bounties:", e);
   }
 }
+
+// -------------------- Expiration warnings (24h prior) --------------------
+function isApprovedAndActiveWithEnds(req, now = Date.now()) {
+  if (!req || req.status !== "approved" || !req.approvedAt) return null;
+  const endsAt = req.approvedAt + SEVEN_DAYS_MS;
+  if (endsAt <= now) return null;
+  return endsAt;
+}
+
+function scheduleWhiteFlagExpiryWarning(requestId) {
+  const req = requests[requestId];
+  const now = Date.now();
+  const endsAt = isApprovedAndActiveWithEnds(req, now);
+  if (!endsAt) return;
+
+  const warnAt = endsAt - ONE_DAY_MS;
+  if (req.wfWarnedAt) return; // already warned
+
+  // Clear existing
+  const existing = activeWfAlertTimeouts.get(requestId);
+  if (existing) clearTimeout(existing);
+
+  const delay = Math.max(0, warnAt - now);
+
+  const t = setTimeout(async () => {
+    try {
+      requests = readJson(REQUESTS_PATH, {});
+      const r = requests[requestId];
+      const now2 = Date.now();
+      const endsAt2 = isApprovedAndActiveWithEnds(r, now2);
+      if (!endsAt2) return;
+
+      const warnAt2 = endsAt2 - ONE_DAY_MS;
+      if (r.wfWarnedAt) return;
+      if (now2 < warnAt2 || now2 >= endsAt2) return;
+
+      r.wfWarnedAt = now2;
+      requests[requestId] = r;
+      persist();
+
+      const guild = await safeFetchGuild(bot);
+      if (!guild || !state.adminChannelId) return;
+
+      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      if (!adminCh || !isTextChannel(adminCh)) return;
+
+      const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
+      await adminCh.send(
+        `${ping}⚠️ **EXODUS OVERSEER** — White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
+          `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
+      );
+    } catch (e) {
+      console.error("White Flag warning failed:", e);
+    } finally {
+      activeWfAlertTimeouts.delete(requestId);
+    }
+  }, delay);
+
+  activeWfAlertTimeouts.set(requestId, t);
+}
+
+function scheduleBountyExpiryWarning(requestId) {
+  const req = requests[requestId];
+  const now = Date.now();
+  if (!hasActiveBounty(req, now)) return;
+
+  const endsAt = req.bounty.endsAt;
+  const warnAt = endsAt - ONE_DAY_MS;
+  if (req.bountyWarnedAt) return;
+
+  const existing = activeBountyAlertTimeouts.get(requestId);
+  if (existing) clearTimeout(existing);
+
+  const delay = Math.max(0, warnAt - now);
+
+  const t = setTimeout(async () => {
+    try {
+      requests = readJson(REQUESTS_PATH, {});
+      const r = requests[requestId];
+      const now2 = Date.now();
+      if (!hasActiveBounty(r, now2)) return;
+
+      const endsAt2 = r.bounty.endsAt;
+      const warnAt2 = endsAt2 - ONE_DAY_MS;
+      if (r.bountyWarnedAt) return;
+      if (now2 < warnAt2 || now2 >= endsAt2) return;
+
+      r.bountyWarnedAt = now2;
+      requests[requestId] = r;
+      persist();
+
+      const guild = await safeFetchGuild(bot);
+      if (!guild || !state.adminChannelId) return;
+
+      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      if (!adminCh || !isTextChannel(adminCh)) return;
+
+      const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
+      await adminCh.send(
+        `${ping}⚠️ **EXODUS OVERSEER** — Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
+          `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
+      );
+    } catch (e) {
+      console.error("Bounty warning failed:", e);
+    } finally {
+      activeBountyAlertTimeouts.delete(requestId);
+    }
+  }, delay);
+
+  activeBountyAlertTimeouts.set(requestId, t);
+}
+
 
 
 async function expireOverdueApprovalsOnStartup() {
@@ -637,9 +753,11 @@ bot.once("clientReady", async () => {
     for (const [id, r] of Object.entries(requests)) {
       if (isApprovedAndActive(r, now)) {
         scheduleExpiry(id);
+        scheduleWhiteFlagExpiryWarning(id);
       }
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
+        scheduleBountyExpiryWarning(id);
       }
     }
   } catch (e) {
@@ -849,6 +967,7 @@ bot.on("interactionCreate", async (interaction) => {
             persist();
 
             scheduleBountyExpiry(existing.id);
+            scheduleBountyExpiryWarning(existing.id);
 
             return interaction.reply({
               content:
@@ -879,6 +998,7 @@ bot.on("interactionCreate", async (interaction) => {
           requests[id] = record;
           persist();
           scheduleBountyExpiry(id);
+          scheduleBountyExpiryWarning(id);
 
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
@@ -1204,6 +1324,7 @@ bot.on("interactionCreate", async (interaction) => {
           persist();
 
           scheduleExpiry(requestId);
+          scheduleWhiteFlagExpiryWarning(requestId);
 
           // Update admin message components: disable approve/deny, add "End Early" button
           const row = new ActionRowBuilder().addComponents(
@@ -1316,6 +1437,7 @@ bot.on("interactionCreate", async (interaction) => {
           persist();
 
           scheduleBountyExpiry(requestId);
+          scheduleBountyExpiryWarning(requestId);
 
           // Announce Open Season (ping role)
           const announceCh = await interaction.guild.channels
