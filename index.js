@@ -521,6 +521,9 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
   }, delay);
 
   activeWfAlertTimeouts.set(requestId, t);
+  // Optional test-mode alert
+  maybeSendTestAlert({ kind: "whiteflag", requestId, req, realWarnAt: warnAt });
+
 }
 
 function scheduleBountyExpiryWarning(requestId) {
@@ -572,6 +575,9 @@ function scheduleBountyExpiryWarning(requestId) {
   }, delay);
 
   activeBountyAlertTimeouts.set(requestId, t);
+  // Optional test-mode alert
+  maybeSendTestAlert({ kind: "bounty", requestId, req, realWarnAt: warnAt });
+
 }
 
 
@@ -840,6 +846,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1050,6 +1057,7 @@ bot.on("interactionCreate", async (interaction) => {
 
             scheduleBountyExpiry(existing.id);
             scheduleBountyExpiryWarning(existing.id);
+            maybeSendTestAlert({ kind: "bounty", requestId: existing.id, req: existing, realWarnAt: null });
 
             return interaction.reply({
               content:
@@ -1081,6 +1089,7 @@ bot.on("interactionCreate", async (interaction) => {
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
@@ -1407,6 +1416,7 @@ bot.on("interactionCreate", async (interaction) => {
 
           scheduleExpiry(requestId);
           scheduleWhiteFlagExpiryWarning(requestId);
+          maybeSendTestAlert({ kind: "whiteflag", requestId, req, realWarnAt: null });
 
           // Update admin message components: disable approve/deny, add "End Early" button
           const row = new ActionRowBuilder().addComponents(
