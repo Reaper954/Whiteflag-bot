@@ -51,19 +51,7 @@ const commands = [
     )
     .addChannelOption((opt) =>
       opt
-        .setName("whiteflag_channel")
-        .setDescription("Channel for White Flag announcements/expiration warnings")
-        .setRequired(true)
-    )
-    .addChannelOption((opt) =>
-      opt
-        .setName("bounty_channel")
-        .setDescription("Channel for bounty announcements/expiration warnings")
-        .setRequired(true)
-    )
-    .addChannelOption((opt) =>
-      opt
-        .setName("open_season_channel")
+        .setName("announce_channel")
         .setDescription("Channel to announce OPEN SEASON pings")
         .setRequired(true)
     )
