@@ -384,7 +384,8 @@ async function expireOverdueBountiesOnStartup() {
 
 
 async function scheduleTestAlertsOnStartup() {
-  if (!isTestMode()) return;
+  const _atm = Number(process.env.ALERT_TEST_MINUTES || 0);
+  if (!Number.isFinite(_atm) || _atm <= 0) return;
   try {
     requests = readJson(REQUESTS_PATH, {});
     const now = Date.now();
