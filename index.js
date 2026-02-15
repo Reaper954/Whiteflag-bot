@@ -107,13 +107,23 @@ let state = readJson(STATE_PATH, {
   rulesChannelId: null,
   applyChannelId: null,
   adminChannelId: null,
+  // Backwards-compat (old single announce channel)
   announceChannelId: null,
+  // New: separate announcement channels
+  whiteflagAnnounceChannelId: null,
+  bountyAnnounceChannelId: null,
+  openSeasonChannelId: null,
   adminRoleId: null,
   openSeasonRoleId: null,
   rulesAcceptedRoleId: null,
   rulesMessageId: null,
   applyMessageId: null,
 });
+
+// ---- State migration (older configs) ----
+if (!state.openSeasonChannelId && state.announceChannelId) state.openSeasonChannelId = state.announceChannelId;
+if (!state.bountyAnnounceChannelId && state.announceChannelId) state.bountyAnnounceChannelId = state.announceChannelId;
+if (!state.whiteflagAnnounceChannelId && state.adminChannelId) state.whiteflagAnnounceChannelId = state.adminChannelId;
 
 // requests = { [requestId]: { ... } }
 let requests = readJson(REQUESTS_PATH, {});
@@ -146,6 +156,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // 2 weeks in ms
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+const BOUNTY_REWARD = "2,000 tokens";
 
 // -------------------- Expiration alert test mode --------------------
 // Set ALERT_TEST_MINUTES (e.g. 2) to send a quick test alert after approvals/bounties, and on startup for active records.
@@ -404,7 +415,7 @@ function scheduleBountyExpiry(requestId) {
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
 
-      const announceCh = await safeFetchChannel(guild, state.announceChannelId);
+      const announceCh = await safeFetchChannel(guild, state.bountyAnnounceChannelId || state.announceChannelId);
       if (announceCh && isTextChannel(announceCh)) {
         await announceCh.send(
           `🏁 **BOUNTY CLOSED** — Target cleared for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
@@ -503,14 +514,13 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
       persist();
 
       const guild = await safeFetchGuild(bot);
-      if (!guild || !state.adminChannelId) return;
+      if (!guild) return;
 
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
-      if (!adminCh || !isTextChannel(adminCh)) return;
+      const wfCh = await safeFetchChannel(guild, state.whiteflagAnnounceChannelId || state.adminChannelId);
+      if (!wfCh || !isTextChannel(wfCh)) return;
 
-      const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
-      await adminCh.send(
-        `${ping}⚠️ **** — White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
+      await wfCh.send(
+        `⚠️ White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
     } catch (_e) {
@@ -557,15 +567,14 @@ function scheduleBountyExpiryWarning(requestId) {
       persist();
 
       const guild = await safeFetchGuild(bot);
-      if (!guild || !state.adminChannelId) return;
+      if (!guild) return;
 
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
-      if (!adminCh || !isTextChannel(adminCh)) return;
+      const bountyCh = await safeFetchChannel(guild, state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId);
+      if (!bountyCh || !isTextChannel(bountyCh)) return;
 
-      const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
-      await adminCh.send(
-        `${ping}⚠️ **** — Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
-          `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
+      await bountyCh.send(
+        `⚠️ Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
+          `Reward: **${BOUNTY_REWARD}** — Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
     } catch (_e) {
       console.error("Bounty warning failed:", _e);
@@ -738,7 +747,19 @@ async function registerSlashCommands() {
       )
       .addChannelOption((opt) =>
         opt
-          .setName("announce_channel")
+          .setName("whiteflag_channel")
+          .setDescription("Channel for White Flag announcements/expiration warnings")
+          .setRequired(true)
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName("bounty_channel")
+          .setDescription("Channel for bounty announcements/expiration warnings")
+          .setRequired(true)
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName("open_season_channel")
           .setDescription("Channel to announce OPEN SEASON pings")
           .setRequired(true)
       )
@@ -846,7 +867,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -874,11 +895,13 @@ bot.on("interactionCreate", async (interaction) => {
         const rulesChannel = interaction.options.getChannel("rules_channel");
         const applyChannel = interaction.options.getChannel("apply_channel");
         const adminChannel = interaction.options.getChannel("admin_channel");
-        const announceChannel = interaction.options.getChannel("announce_channel");
+        const whiteflagChannel = interaction.options.getChannel("whiteflag_channel");
+        const bountyChannel = interaction.options.getChannel("bounty_channel");
+        const openSeasonChannel = interaction.options.getChannel("open_season_channel");
         const adminRole = interaction.options.getRole("admin_role");
         const openSeasonRole = interaction.options.getRole("open_season_role");
 
-        if (![rulesChannel, applyChannel, adminChannel, announceChannel].every(isTextChannel)) {
+        if (![rulesChannel, applyChannel, adminChannel, whiteflagChannel, bountyChannel, openSeasonChannel].every(isTextChannel)) {
           return interaction.reply({
             content: "All channels must be text channels.",
             ephemeral: true,
@@ -899,7 +922,11 @@ bot.on("interactionCreate", async (interaction) => {
         state.rulesChannelId = rulesChannel.id;
         state.applyChannelId = applyChannel.id;
         state.adminChannelId = adminChannel.id;
-        state.announceChannelId = announceChannel.id;
+        state.whiteflagAnnounceChannelId = whiteflagChannel.id;
+        state.bountyAnnounceChannelId = bountyChannel.id;
+        state.openSeasonChannelId = openSeasonChannel.id;
+        // Backwards compat
+        state.announceChannelId = openSeasonChannel.id;
         state.adminRoleId = adminRole.id;
         state.openSeasonRoleId = openSeasonRole.id;
         state.rulesAcceptedRoleId = rulesAcceptedRole.id;
@@ -925,7 +952,9 @@ bot.on("interactionCreate", async (interaction) => {
             `• Rules panel: <#${rulesChannel.id}>\n` +
             `• Apply panel: <#${applyChannel.id}>\n` +
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
-            `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\n` +
+            `• White Flag announcements: <#${whiteflagChannel.id}>\n` +
+            `• Bounty announcements: <#${bountyChannel.id}>\n` +
+            `• Open Season announcements: <#${openSeasonChannel.id}> (ping <@&${openSeasonRole.id}>)\n` +
             `• Rules gate role: <@&${rulesAcceptedRole.id}>`,
           ephemeral: true,
         });
@@ -1002,7 +1031,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         const lines = active.map((r) => {
           const server = escapeMd(r.serverType || r.cluster || "N/A");
-          return `• **${escapeMd(r.tribeName)}** — IGN: **${escapeMd(r.ign)}** — Server: **${server}** — Ends ${fmtDiscordRelativeTime(r.bounty.endsAt)} (ID: \`${r.id}\`)`;
+          return `• **${escapeMd(r.tribeName)}** — IGN: **${escapeMd(r.ign)}** — Server: **${server}** — Reward: **${BOUNTY_REWARD}** — Ends ${fmtDiscordRelativeTime(r.bounty.endsAt)} (ID: \`${r.id}\`)`;
         });
 
         const embed = new EmbedBuilder()
@@ -1089,14 +1118,14 @@ bot.on("interactionCreate", async (interaction) => {
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
-          const announceCh = await safeFetchChannel(guild, state.announceChannelId);
+          const announceCh = await safeFetchChannel(guild, state.bountyAnnounceChannelId || state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
               `🎯 **BOUNTY ISSUED** — **${escapeMd(record.tribeName)}** (IGN: **${escapeMd(
                 record.ign
-              )}**, Server: **${escapeMd(record.serverType)}**) — ends ${fmtDiscordRelativeTime(
+              )}**, Server: **${escapeMd(record.serverType)}**) — Reward: **${BOUNTY_REWARD}** — ends ${fmtDiscordRelativeTime(
                 record.bounty.endsAt
               )}.`
             );
@@ -1139,7 +1168,7 @@ bot.on("interactionCreate", async (interaction) => {
           requests[target.id] = target;
           persist();
 
-          const announceCh = await safeFetchChannel(guild, state.announceChannelId);
+          const announceCh = await safeFetchChannel(guild, state.bountyAnnounceChannelId || state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
               `🛑 **BOUNTY CANCELED** — **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`
@@ -1533,13 +1562,13 @@ bot.on("interactionCreate", async (interaction) => {
 
           // Announce Open Season (ping role)
           const announceCh = await interaction.guild.channels
-            .fetch(state.announceChannelId)
+            .fetch(state.openSeasonChannelId || state.announceChannelId)
             .catch(() => null);
 
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
               `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — Protection TERMINATED for **${escapeMd(req.tribeName)}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(req.serverType || req.cluster || "N/A")}**).
-🎯 **BOUNTY ISSUED** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
+🎯 **BOUNTY ISSUED** — Reward: **${BOUNTY_REWARD}** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
             );
           }
 
