@@ -832,7 +832,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            `🛡️ **EXODUS OVERSEER:** Setup complete.\n` +
+            "🛡️ **EXODUS OVERSEER:** Setup complete.\n" +
             `• Rules panel: <#${rulesChannel.id}>\n` +
             `• Apply panel: <#${applyChannel.id}>\n` +
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
