@@ -377,7 +377,7 @@ async function expireOverdueBountiesOnStartup() {
       }
     }
     if (changed) persist();
-  } catch (e) {
+  } catch (_e) {
     console.error("Failed to expire overdue bounties:", e);
   }
 }
@@ -432,7 +432,7 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
         `${ping}⚠️ **EXODUS OVERSEER** — White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch (e) {
+    } catch (_e) {
       console.error("White Flag warning failed:", e);
     } finally {
       activeWfAlertTimeouts.delete(requestId);
@@ -483,7 +483,7 @@ function scheduleBountyExpiryWarning(requestId) {
         `${ping}⚠️ **EXODUS OVERSEER** — Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch (e) {
+    } catch (_e) {
       console.error("Bounty warning failed:", e);
     } finally {
       activeBountyAlertTimeouts.delete(requestId);
@@ -527,7 +527,7 @@ async function expireOverdueApprovalsOnStartup() {
       }
     }
     if (changed) persist();
-  } catch (e) {
+  } catch (_e) {
     console.error("Failed to expire overdue approvals:", e);
   }
 }
@@ -725,7 +725,7 @@ async function registerSlashCommands() {
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
       console.log("✅ Registered global slash commands (can take up to ~1 hour to appear).");
     }
-  } catch (e) {
+  } catch (_e) {
     console.error("Failed to register slash commands:", e);
   }
 }
@@ -760,7 +760,7 @@ bot.once("clientReady", async () => {
         scheduleBountyExpiryWarning(id);
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.error("Failed to reschedule timers:", e);
   }
 });
@@ -832,7 +832,7 @@ bot.on("interactionCreate", async (interaction) => {
 
         return interaction.reply({
           content:
-            "🛡️ **EXODUS OVERSEER:** Setup complete.\n" +
+            `🛡️ **EXODUS OVERSEER:** Setup complete.\n` +
             `• Rules panel: <#${rulesChannel.id}>\n` +
             `• Apply panel: <#${applyChannel.id}>\n` +
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
@@ -928,7 +928,7 @@ bot.on("interactionCreate", async (interaction) => {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
 
-        const member = await guild.members.fetch(interaction.user.id).catch((e) => null);
+        const member = await guild.members.fetch(interaction.user.id).catch((_e) => null);
         const isAdminPerm =
           member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
@@ -1067,7 +1067,7 @@ bot.on("interactionCreate", async (interaction) => {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
 
-        const member = await guild.members.fetch(interaction.user.id).catch((e) => null);
+        const member = await guild.members.fetch(interaction.user.id).catch((_e) => null);
         const isAdminPerm =
           member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
@@ -1588,7 +1588,7 @@ bot.on("interactionCreate", async (interaction) => {
     if (interaction && !interaction.replied && !interaction.deferred) {
       try {
         await interaction.reply({ content: "Something went wrong.", ephemeral: true });
-      } catch (e) {
+      } catch (_e) {
         // ignore reply errors
       }
     }
