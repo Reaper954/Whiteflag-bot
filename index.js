@@ -199,7 +199,7 @@ async function maybeSendTestAlert({ kind, requestId, req, realWarnAt }) {
         )}** (ID: \`${r.id}\`).\n` +
           `Real 24h warning would be at ${realWarnAt ? fmtDiscordRelativeTime(realWarnAt) : "N/A"}; expires ${endsAt ? fmtDiscordRelativeTime(endsAt) : "N/A"}.`
       );
-    } catch (_e) {
+    } catch {
       // ignore
     }
   }, ALERT_TEST_MS);
@@ -458,9 +458,9 @@ async function scheduleTestAlertsOnStartup() {
         maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: warnAt });
       }
     }
-  } catch (_e) {
-    // ignore
-  }
+  } catch {
+      // ignore
+    }
 }
 
 // -------------------- Expiration warnings (24h prior) --------------------
@@ -846,7 +846,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1017,7 +1017,7 @@ bot.on("interactionCreate", async (interaction) => {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
 
-        const member = await guild.members.fetch(interaction.user.id).catch((_e) => null);
+        const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
           member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
@@ -1089,7 +1089,7 @@ bot.on("interactionCreate", async (interaction) => {
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
 
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
@@ -1158,7 +1158,7 @@ bot.on("interactionCreate", async (interaction) => {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
 
-        const member = await guild.members.fetch(interaction.user.id).catch((_e) => null);
+        const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
           member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
