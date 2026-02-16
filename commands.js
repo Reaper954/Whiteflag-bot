@@ -55,6 +55,12 @@ const commands = [
         .setDescription("Channel to announce OPEN SEASON pings")
         .setRequired(true)
     )
+    .addChannelOption((opt) =>
+      opt
+        .setName("bounty_channel")
+        .setDescription("Channel to announce bounties")
+        .setRequired(false)
+    )
     .addRoleOption((opt) =>
       opt
         .setName("admin_role")
@@ -67,39 +73,84 @@ const commands = [
         .setDescription("Role to ping when ending early (OPEN SEASON)")
         .setRequired(true)
     ),
+
   new SlashCommandBuilder()
     .setName("rules")
     .setDescription("Show the White Flag rules (ephemeral)."),
+
   new SlashCommandBuilder()
     .setName("whiteflags")
     .setDescription("White Flag utilities.")
-          .addSubcommand((sc) =>
-        sc
-          .setName("claim")
-          .setDescription("Submit proof to claim a bounty reward.")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
-          )
-      )
-.addStringOption((opt) =>
-          opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
+    .addSubcommand((sc) =>
+      sc.setName("active").setDescription("Show all approved and active White Flags.")
+    ),
+
+  new SlashCommandBuilder()
+    .setName("bounty")
+    .setDescription("Create, remove, or claim bounties.")
+    .addSubcommand((sc) =>
+      sc
+        .setName("add")
+        .setDescription("Add/refresh a bounty for a tribe (1 week).")
+        .addStringOption((opt) =>
+          opt.setName("tribe").setDescription("Tribe name").setRequired(true)
         )
         .addStringOption((opt) =>
-          opt.setName("notes").setDescription("Optional notes").setRequired(false)
+          opt.setName("ign").setDescription("Bounty target IGN (optional)").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("server").setDescription("Server/Cluster (optional)").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("reason").setDescription("Reason (optional)").setRequired(false)
+        )
+    )
+    .addSubcommand((sc) =>
+      sc
+        .setName("remove")
+        .setDescription("Remove an active bounty by tribe or by ID.")
+        .addStringOption((opt) =>
+          opt.setName("tribe").setDescription("Tribe name").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("id").setDescription("Bounty record ID").setRequired(false)
+        )
+    )
+    .addSubcommand((sc) =>
+      sc
+        .setName("claim")
+        .setDescription("Submit a bounty claim (creates an admin ticket).")
+        .addStringOption((opt) =>
+          opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName("ign").setDescription("Your IGN").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName("bounty_ign").setDescription("Bounty target IGN").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName("proof").setDescription("Proof link (clip/screenshot)").setRequired(true)
         )
     ),
 
-].map((c) => c.toJSON());
+  new SlashCommandBuilder()
+    .setName("bounties")
+    .setDescription("Bounty utilities.")
+    .addSubcommand((sc) => sc.setName("active").setDescription("Show all active bounties.")),
 
+  new SlashCommandBuilder()
+    .setName("tribe")
+    .setDescription("Admin tribe utilities.")
+    .addSubcommand((sc) =>
+      sc
+        .setName("endwhiteflag")
+        .setDescription("End a tribe's White Flag early (OPEN SEASON + bounty).")
+        .addStringOption((opt) =>
+          opt.setName("id").setDescription("White Flag record ID").setRequired(true)
+        )
+    ),
+].map((c) => c.toJSON());
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
