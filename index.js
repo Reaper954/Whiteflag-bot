@@ -147,8 +147,8 @@ const CID = {
 // 7 days in ms
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-// 2 weeks in ms
-const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+// 1 week in ms
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const BOUNTY_REWARD = "2,000 tokens";
 
 // -------------------- Expiration alert test mode --------------------
@@ -388,7 +388,7 @@ function scheduleExpiry(requestId) {
 
   activeTimeouts.set(requestId, t);
 }
-// -------------------- Bounty lifecycle (2 weeks) --------------------
+// -------------------- Bounty lifecycle (1 week) --------------------
 function hasActiveBounty(req, now = Date.now()) {
   return (
     req &&
@@ -779,33 +779,34 @@ async function registerSlashCommands() {
     new SlashCommandBuilder()
       .setName("rules")
       .setDescription("Show the White Flag rules (ephemeral)."),
-    new SlashCommandBuilder()
-      .setName("whiteflags")
-      .setDescription("White Flag utilities.")
-            .addSubcommand((sc) =>
-        sc
-          .setName("claim")
-          .setDescription("Submit proof to claim a bounty reward.")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
-          )
+new SlashCommandBuilder()
+  .setName("whiteflags")
+  .setDescription("White Flag utilities.")
+  .addSubcommand((sc) =>
+    sc
+      .setName("active")
+      .setDescription("Show all active White Flags (admin only).")
+  )
+  .addSubcommand((sc) =>
+    sc
+      .setName("claim")
+      .setDescription("Submit proof to claim a bounty reward.")
+      .addStringOption((opt) =>
+        opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
       )
-.addStringOption((opt) =>
-            opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("notes").setDescription("Optional notes").setRequired(false)
-          )
-      ),
+      .addStringOption((opt) =>
+        opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
+      )
+      .addStringOption((opt) =>
+        opt.setName("notes").setDescription("Optional notes").setRequired(false)
+      )
+  ),
 
   ].map((c) => c.toJSON());
 
@@ -1120,7 +1121,7 @@ requests = readJson(REQUESTS_PATH, {});
               ...existing.bounty,
               active: true,
               startedAt: existing.bounty.startedAt || now,
-              endsAt: now + TWO_WEEKS_MS,
+              endsAt: now + ONE_WEEK_MS,
               startedBy: existing.bounty.startedBy || interaction.user.id,
               refreshedAt: now,
               refreshedBy: interaction.user.id,
@@ -1156,7 +1157,7 @@ requests = readJson(REQUESTS_PATH, {});
             bounty: {
               active: true,
               startedAt: now,
-              endsAt: now + TWO_WEEKS_MS,
+              endsAt: now + ONE_WEEK_MS,
               startedBy: interaction.user.id,
               reason: reason || "Manual bounty created.",
             },
@@ -1650,7 +1651,7 @@ requests = readJson(REQUESTS_PATH, {});
           req.bounty = {
             active: true,
             startedAt: nowB,
-            endsAt: nowB + TWO_WEEKS_MS,
+            endsAt: nowB + ONE_WEEK_MS,
             startedBy: interaction.user.id,
             reason: "White Flag ended early (Open Season).",
           };
