@@ -764,12 +764,6 @@ async function registerSlashCommands() {
           .setDescription("Channel to announce OPEN SEASON pings")
           .setRequired(true)
       )
-      .addChannelOption((opt) =>
-        opt
-          .setName("bounty_channel")
-          .setDescription("Channel to announce bounties")
-          .setRequired(false)
-      )
       .addRoleOption((opt) =>
         opt
           .setName("admin_role")
@@ -781,7 +775,14 @@ async function registerSlashCommands() {
           .setName("open_season_role")
           .setDescription("Role to ping when ending early (OPEN SEASON)")
           .setRequired(true)
-      ),
+      )
+      .addChannelOption((opt) =>
+        opt
+          .setName("bounty_channel")
+          .setDescription("Channel to announce bounties")
+          .setRequired(false)
+      )
+,
 
     new SlashCommandBuilder()
       .setName("rules")
@@ -909,7 +910,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1222,7 +1223,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
               interaction.guild,
