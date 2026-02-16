@@ -628,7 +628,7 @@ const bot = new Client({
 });
 
 bot.once("clientReady", async () => {
-  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v1`);
+  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v2_endearly_claimpost`);
 
   await registerSlashCommandsOnStartup();
   await expireOverdueOnStartup();
@@ -1044,6 +1044,28 @@ bot.on("interactionCreate", async (interaction) => {
           req.deniedBy = interaction.user.id;
           requests[requestId] = req;
           persistAll();
+
+// Disable buttons on the admin review message
+try {
+  const disabledRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${CID.ADMIN_APPROVE_PREFIX}${requestId}`)
+      .setLabel("Approve")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(`${CID.ADMIN_DENY_PREFIX}${requestId}`)
+      .setLabel("Deny")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(true)
+  );
+  if (interaction.message && interaction.message.edit) {
+    await interaction.message.edit({ components: [disabledRow] }).catch(() => null);
+  }
+} catch {
+  // ignore
+}
+
           return interaction.reply({ content: `❌ Denied White Flag for **${escapeMd(req.tribeName)}**.`, flags: 64 });
         }
 
@@ -1062,6 +1084,29 @@ bot.on("interactionCreate", async (interaction) => {
 
         scheduleExpiry(requestId);
         scheduleWhiteFlagExpiryWarning(requestId);
+
+// Update admin review message: disable approve/deny and add End Early button
+try {
+  const disabledRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`${CID.ADMIN_APPROVE_PREFIX}${requestId}`)
+      .setLabel("Approved")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(`${CID.ADMIN_DENY_PREFIX}${requestId}`)
+      .setLabel("Deny")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(true)
+  );
+  const endRow = buildEndEarlyRow(requestId);
+  if (interaction.message && interaction.message.edit) {
+    await interaction.message.edit({ components: [disabledRow, endRow] }).catch(() => null);
+  }
+} catch {
+  // ignore
+}
+
 
         return interaction.reply({ content: `✅ Approved White Flag for **${escapeMd(req.tribeName)}**. Ends ${fmtDiscordRelativeTime(req.approvedAt + SEVEN_DAYS_MS)}.`, flags: 64 });
       }
@@ -1213,6 +1258,27 @@ bot.on("interactionCreate", async (interaction) => {
             `Claim ID: \`${claim.id}\`  Record ID: \`${claim.bountyRecordId}\``;
 
           if (outCh) await outCh.send(details);
+
+// Post a public "claimed" notice in the bounty channel (or announce channel), if different from admin channel
+try {
+  const guild = interaction.guild;
+  const bountyCh = await safeFetchChannel(
+    guild,
+    state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
+  );
+  if (bountyCh && isTextChannel(bountyCh)) {
+    // Avoid double-posting in the same channel as the detailed admin log
+    if (!outCh || bountyCh.id !== outCh.id) {
+      await bountyCh.send(
+        `🏁 **BOUNTY CLAIMED** — **${escapeMd(claim.tribeName)}** ` +
+          `Reward: **${BOUNTY_REWARD}** — Claimant: <@${claim.submittedBy}>.`
+      );
+    }
+  }
+} catch {
+  // ignore
+}
+
 
           return interaction.reply({ content: "✅ Claim approved and bounty closed.", flags: 64 });
         }
