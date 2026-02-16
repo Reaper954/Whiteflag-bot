@@ -1294,8 +1294,7 @@ try {
     // Avoid double-posting in the same channel as the detailed admin log
     if (!outCh || bountyCh.id !== outCh.id) {
       await bountyCh.send(
-        `🏁 **BOUNTY CLAIMED** — **${escapeMd(claim.tribeName)}** ` +
-          `Reward: **${BOUNTY_REWARD}** — Claimant: <@${claim.submittedBy}>.`
+        `🏁 **BOUNTY CLAIMED** on tribe **${escapeMd(claim.tribeName)}** by <@${claim.submittedBy}>.`
       );
     }
   }
