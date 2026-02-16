@@ -1784,28 +1784,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
     persist();
 
     // Remove/disable the "Claim Bounty" button on the bounty announcement (if we have it stored)
-    try {
-      const chId = record.bounty.announceChannelId;
-      const msgId = record.bounty.announceMessageId;
-      if (chId && msgId) {
-        const bountyCh = await interaction.guild.channels.fetch(chId).catch(() => null);
-        if (bountyCh && isTextChannel(bountyCh)) {
-          const msg = await bountyCh.messages.fetch(msgId).catch(() => null);
-          if (msg) {
-            await msg.edit({
-              content:
-                msg.content +
-                `\n✅ **CLAIMED** by <@${claim.submittedBy}> — approved by <@${interaction.user.id}>.`,
-              components: [],
-            }).catch(() => null);
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // Announce closure (no ping)
+        // Announce closure (no ping)
     const announceCh = await safeFetchChannel(interaction.guild, state.announceChannelId);
     if (announceCh && isTextChannel(announceCh)) {
       if (!state.adminChannelId || announceCh.id !== state.adminChannelId) {
