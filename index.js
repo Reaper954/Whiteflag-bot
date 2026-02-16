@@ -840,7 +840,7 @@ async function registerSlashCommands() {
             opt.setName("bounty_ign").setDescription("Bounty target IGN").setRequired(true)
           )
           .addStringOption((opt) =>
-            opt.setName("proof").setDescription("Proof link (clip/screenshot)").setRequired(true)
+            opt.setName("proof").setDescription("Submit proof in a ticket)").setRequired(true)
           )
       ),
 
