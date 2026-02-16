@@ -275,6 +275,20 @@ function isTextChannel(ch) {
   );
 }
 
+
+function uniqNonNull(arr) {
+  const out = [];
+  const seen = new Set();
+  for (const v of arr) {
+    if (!v) continue;
+    if (seen.has(v)) continue;
+    seen.add(v);
+    out.push(v);
+  }
+  return out;
+}
+
+
 function newRequestId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -1794,11 +1808,13 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
     // Announce closure (no ping)
     const announceCh = await safeFetchChannel(interaction.guild, state.announceChannelId);
     if (announceCh && isTextChannel(announceCh)) {
-      await announceCh.send(
-        `🏁 **BOUNTY CLAIM APPROVED** — **${escapeMd(record.tribeName)}** bounty closed. ` +
-        `Claimant: <@${claim.submittedBy}> — Reward: **${BOUNTY_REWARD}**.`
-      );
-    }
+      if (!state.adminChannelId || announceCh.id !== state.adminChannelId) {
+
+        await announceCh.send(`🏁 **BOUNTY CLAIM APPROVED** — **${escapeMd(record.tribeName)}** bounty closed. ` +
+        `Claimant: <@${claim.submittedBy}> — Reward: **${BOUNTY_REWARD}**.`);
+
+      }
+}
   }
 
   // Disable buttons on the claim message
