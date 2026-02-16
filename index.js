@@ -1904,10 +1904,11 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
                 components: [claimRow],
               });
             // Store the announcement message so we can disable it when claimed/removed
-            record.bounty.announceChannelId = bountyCh.id;
-            record.bounty.announceMessageId = bountyMsg.id;
-            requests[id] = record;
-            persist();
+            target.bounty.announceChannelId = bountyCh.id;
+target.bounty.announceMessageId = bountyMsg.id;
+requests[target.id] = target;
+persist();
+
 
             }
           }
