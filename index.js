@@ -430,11 +430,6 @@ function scheduleBountyExpiry(requestId) {
       } catch {
         // ignore
       }
-
-      const announceCh = await safeFetchChannel(guild, state.announceChannelId);
-      if (announceCh && isTextChannel(announceCh)) {
-        await announceCh.send(`🏁 **BOUNTY CLOSED** — **${escapeMd(r.tribeName)}** bounty expired.`);
-      }
     } catch (e) {
       console.error("Bounty expiry failed:", e);
     } finally {
@@ -647,7 +642,7 @@ const bot = new Client({
 });
 
 bot.once("clientReady", async () => {
-  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v4_dm_restore`);
+  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v5_combined_open_season_bounty`);
 
   await registerSlashCommandsOnStartup();
   await expireOverdueOnStartup();
@@ -1186,6 +1181,7 @@ try {
           );
           const bountyMsg = await bountyCh.send({
             content:
+              `${state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : ``}🛑 **OPEN SEASON** — White Flag ended early for **${escapeMd(req.tribeName)}**.\n` +
               `🎯 **BOUNTY ISSUED** — **${escapeMd(req.tribeName)}** ` +
               `(IGN: **${escapeMd(req.ign || "N/A")}**, Server: **${escapeMd(req.serverType || "N/A")}**) — ` +
               `Reward: **${BOUNTY_REWARD}** — ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`,
