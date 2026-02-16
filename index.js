@@ -129,6 +129,7 @@ function writeJsonWithBackup(filePath, obj) {
  *  adminChannelId,
  *  announceChannelId,
  *  bountyAnnounceChannelId,
+ *  bountyClaimsChannelId,
  *  adminRoleId,
  *  openSeasonRoleId,
  *  rulesAcceptedRoleId,
@@ -143,6 +144,7 @@ let state = safeReadJson(STATE_PATH, {
   adminChannelId: null,
   announceChannelId: null,
   bountyAnnounceChannelId: null,
+  bountyClaimsChannelId: null,
   adminRoleId: null,
   openSeasonRoleId: null,
   rulesAcceptedRoleId: null,
@@ -286,7 +288,7 @@ function scheduleExpiry(requestId) {
 
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      const adminCh = await safeFetchChannel(guild, state.bountyClaimsChannelId || state.adminChannelId);
       if (adminCh && isTextChannel(adminCh)) {
         await adminCh.send(`⏳ PROTECTION EXPIRED — White Flag ended for **${escapeMd(r.tribeName)}**.`);
       }
@@ -323,7 +325,7 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
 
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      const adminCh = await safeFetchChannel(guild, state.bountyClaimsChannelId || state.adminChannelId);
       if (adminCh && isTextChannel(adminCh)) {
         const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
         await adminCh.send(`${ping}⚠️ White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. Ends ${fmtDiscordRelativeTime(endsAt)} (ID: \`${r.id}\`).`);
@@ -360,7 +362,7 @@ function scheduleBountyExpiryWarning(requestId) {
 
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+      const adminCh = await safeFetchChannel(guild, state.bountyClaimsChannelId || state.adminChannelId);
       if (adminCh && isTextChannel(adminCh)) {
         const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
         await adminCh.send(`${ping}⚠️ Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. Ends ${fmtDiscordRelativeTime(r.bounty.endsAt)} (ID: \`${r.id}\`).`);
@@ -546,6 +548,7 @@ async function registerSlashCommandsOnStartup() {
       .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
       .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
       .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true))
+      .addChannelOption((o) => o.setName("bounty_claims_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
       .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
     new SlashCommandBuilder().setName("rules").setDescription("Show rules"),
     new SlashCommandBuilder().setName("whiteflags").setDescription("White Flag utilities.").addSubcommand((sc) => sc.setName("active").setDescription("Show active White Flags")),
@@ -628,7 +631,7 @@ const bot = new Client({
 });
 
 bot.once("clientReady", async () => {
-  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v2_endearly_claimpost`);
+  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v3_claimlog_channel`);
 
   await registerSlashCommandsOnStartup();
   await expireOverdueOnStartup();
@@ -671,6 +674,7 @@ bot.on("interactionCreate", async (interaction) => {
         const adminChannel = interaction.options.getChannel("admin_channel");
         const announceChannel = interaction.options.getChannel("announce_channel");
         const bountyChannel = interaction.options.getChannel("bounty_channel");
+        const bountyClaimsChannel = interaction.options.getChannel("bounty_claims_channel");
         const adminRole = interaction.options.getRole("admin_role");
         const openSeasonRole = interaction.options.getRole("open_season_role");
 
@@ -684,6 +688,7 @@ bot.on("interactionCreate", async (interaction) => {
         state.adminChannelId = adminChannel.id;
         state.announceChannelId = announceChannel.id;
         state.bountyAnnounceChannelId = bountyChannel && isTextChannel(bountyChannel) ? bountyChannel.id : null;
+        state.bountyClaimsChannelId = bountyClaimsChannel && isTextChannel(bountyClaimsChannel) ? bountyClaimsChannel.id : null;
         state.adminRoleId = adminRole?.id || null;
         state.openSeasonRoleId = openSeasonRole?.id || null;
 
@@ -943,7 +948,7 @@ bot.on("interactionCreate", async (interaction) => {
           persistAll();
 
           const guild = interaction.guild;
-          const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+          const adminCh = await safeFetchChannel(guild, state.bountyClaimsChannelId || state.adminChannelId);
           if (adminCh && isTextChannel(adminCh)) {
             const embed = new EmbedBuilder()
               .setTitle("🎯 Bounty Claim Submitted")
@@ -1242,7 +1247,7 @@ try {
           }
 
           // ONE log only (no short duplicate)
-          const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
+          const adminCh = await safeFetchChannel(interaction.guild, state.bountyClaimsChannelId || state.adminChannelId);
           const outCh = adminCh && isTextChannel(adminCh) ? adminCh : null;
 
           const details =
@@ -1250,7 +1255,6 @@ try {
             `Tribe: **${escapeMd(claim.tribeName)}**\n` +
             `Target IGN (claimed): **${escapeMd(claim.bountyTargetIgn)}**\n` +
             `Claimant IGN: **${escapeMd(claim.claimantIgn)}**\n` +
-            `Reward: **${BOUNTY_REWARD}**\n` +
             `Approved by: <@${interaction.user.id}>\n` +
             `Submitted by: <@${claim.submittedBy}>\n` +
             `Proof: ${claim.proof}\n` +
@@ -1271,7 +1275,7 @@ try {
     if (!outCh || bountyCh.id !== outCh.id) {
       await bountyCh.send(
         `🏁 **BOUNTY CLAIMED** — **${escapeMd(claim.tribeName)}** ` +
-          `Reward: **${BOUNTY_REWARD}** — Claimant: <@${claim.submittedBy}>.`
+          `Claimed by: <@${claim.submittedBy}> Reward: **${BOUNTY_REWARD}**.`
       );
     }
   }
@@ -1329,7 +1333,7 @@ try {
         persistAll();
 
         const guild = interaction.guild;
-        const adminCh = await safeFetchChannel(guild, state.adminChannelId);
+        const adminCh = await safeFetchChannel(guild, state.bountyClaimsChannelId || state.adminChannelId);
         if (adminCh && isTextChannel(adminCh)) {
           const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
           await adminCh.send({ content: ping, embeds: [buildAdminReviewEmbed(record)], components: [buildAdminReviewRow(id)] });
@@ -1374,7 +1378,7 @@ try {
         requests[target.id] = target;
         persistAll();
 
-        const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
+        const adminCh = await safeFetchChannel(interaction.guild, state.bountyClaimsChannelId || state.adminChannelId);
         if (adminCh && isTextChannel(adminCh)) {
           const embed = new EmbedBuilder()
             .setTitle("🎯 Bounty Claim Submitted")

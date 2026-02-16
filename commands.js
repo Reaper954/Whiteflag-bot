@@ -29,6 +29,7 @@ const commands = [
     .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
     .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
     .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true))
+    .addChannelOption((o) => o.setName("bounty_claims_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
     .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
 
   new SlashCommandBuilder().setName("rules").setDescription("Show the White Flag rules (ephemeral)."),
@@ -130,4 +131,3 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     process.exit(1);
   }
 })();
-1
