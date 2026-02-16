@@ -1170,7 +1170,7 @@ try {
         const announceCh = await safeFetchChannel(guild, state.announceChannelId);
         const openPing = state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : "";
         if (announceCh && isTextChannel(announceCh)) {
-          await announceCh.send(`${openPing}🛑 **OPEN SEASON** — White Flag ended early for **${escapeMd(req.tribeName)}**.`);
+          await announceCh.send(`🛑 **OPEN SEASON** — White Flag ended early for **${escapeMd(req.tribeName)}**.`);
         }
 
         // Post bounty + claim button
