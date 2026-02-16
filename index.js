@@ -910,7 +910,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1223,7 +1223,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
               interaction.guild,
