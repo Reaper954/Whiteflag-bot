@@ -149,7 +149,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // 2 weeks in ms
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
-const BOUNTY_REWARD = \"2,000 tokens\";
+const BOUNTY_REWARD = "2,000 tokens";
 
 // -------------------- Expiration alert test mode --------------------
 // Set ALERT_TEST_MINUTES (e.g. 2) to send a quick test alert after approvals/bounties, and on startup for active records.
