@@ -782,47 +782,7 @@ async function registerSlashCommands() {
     new SlashCommandBuilder()
       .setName("whiteflags")
       .setDescription("White Flag utilities.")
-      .addSubcommand((sc) =>
-        sc.setName("active").setDescription("Show all approved + active White Flags.")
-      ),
-    new SlashCommandBuilder()
-      .setName("bounties")
-      .setDescription("Bounty utilities.")
-      .addSubcommand((sc) =>
-        sc.setName("active").setDescription("Show all active bounties (2 weeks).")
-      ),
-    new SlashCommandBuilder()
-      .setName("bounty")
-      .setDescription("Create, remove, or claim bounties.")
-      .addSubcommand((sc) =>
-        sc
-          .setName("add")
-          .setDescription("Add/refresh a bounty for a tribe (2 weeks).")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Tribe name").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("ign").setDescription("IGN (optional)").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("server").setDescription("Server (optional)").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("reason").setDescription("Reason (optional)").setRequired(false)
-          )
-      )
-      .addSubcommand((sc) =>
-        sc
-          .setName("remove")
-          .setDescription("Remove an active bounty by tribe or by ID.")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Tribe name").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("id").setDescription("Bounty record ID").setRequired(false)
-          )
-      )
-      .addSubcommand((sc) =>
+            .addSubcommand((sc) =>
         sc
           .setName("claim")
           .setDescription("Submit proof to claim a bounty reward.")
@@ -830,6 +790,16 @@ async function registerSlashCommands() {
             opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
           )
           .addStringOption((opt) =>
+            opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
+          )
+          .addStringOption((opt) =>
+            opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
+          )
+          .addStringOption((opt) =>
+            opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
+          )
+      )
+.addStringOption((opt) =>
             opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
           )
           .addStringOption((opt) =>
@@ -1360,7 +1330,7 @@ requests = readJson(REQUESTS_PATH, {});
 
     // -------------------- Buttons --------------------
     if (interaction.isButton()) {
-      // ---- Player: open bounty claim modal from announcement ----
+            // ---- Player: open bounty claim modal from announcement ----
       if (interaction.customId.startsWith("bounty_claim_open:")) {
         const [, recordId] = interaction.customId.split(":");
         requests = readJson(REQUESTS_PATH, {});
@@ -1374,21 +1344,28 @@ requests = readJson(REQUESTS_PATH, {});
           .setCustomId(`bounty_claim_submit:${recordId}`)
           .setTitle("Bounty Claim");
 
+        const ignInput = new TextInputBuilder()
+          .setCustomId("ign")
+          .setLabel("Your IGN")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const bountyIgnInput = new TextInputBuilder()
+          .setCustomId("bounty_ign")
+          .setLabel("Bounty Target IGN")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
         const proofInput = new TextInputBuilder()
           .setCustomId("proof")
           .setLabel("Proof link (clip/screenshot)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true);
 
-        const notesInput = new TextInputBuilder()
-          .setCustomId("notes")
-          .setLabel("Notes (optional)")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(false);
-
         modal.addComponents(
-          new ActionRowBuilder().addComponents(proofInput),
-          new ActionRowBuilder().addComponents(notesInput)
+          new ActionRowBuilder().addComponents(ignInput),
+          new ActionRowBuilder().addComponents(bountyIgnInput),
+          new ActionRowBuilder().addComponents(proofInput)
         );
 
         return interaction.showModal(modal);
