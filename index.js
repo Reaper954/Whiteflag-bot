@@ -1749,7 +1749,7 @@ requests = readJson(REQUESTS_PATH, {});
                   `🎯 **BOUNTY ISSUED** — **${escapeMd(req.tribeName)}** ` +
                   `(IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
                     req.serverType || req.cluster || "N/A"
-                  )}**) — Reward: **${BOUNTY_REWARD}** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(
+                  )}**) — Reward: **${BOUNTY_REWARD}** — Duration: **7 days** — Ends ${fmtDiscordRelativeTime(
                     req.bounty.endsAt
                   )}.`,
                 components: [claimRow],
