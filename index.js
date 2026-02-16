@@ -149,6 +149,7 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // 2 weeks in ms
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
+const BOUNTY_REWARD = \"2,000 tokens\";
 
 // -------------------- Expiration alert test mode --------------------
 // Set ALERT_TEST_MINUTES (e.g. 2) to send a quick test alert after approvals/bounties, and on startup for active records.
@@ -456,7 +457,7 @@ async function expireOverdueBountiesOnStartup() {
       }
     }
     if (changed) persist();
-  } catch (_e) {
+  } catch {
     console.error("Failed to expire overdue bounties:", _e);
   }
 }
@@ -534,7 +535,7 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
         `${ping}⚠️ **** — White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch (_e) {
+    } catch {
       console.error("White Flag warning failed:", _e);
     } finally {
       activeWfAlertTimeouts.delete(requestId);
@@ -588,7 +589,7 @@ function scheduleBountyExpiryWarning(requestId) {
         `${ping}⚠️ **** — Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch (_e) {
+    } catch {
       console.error("Bounty warning failed:", _e);
     } finally {
       activeBountyAlertTimeouts.delete(requestId);
@@ -635,7 +636,7 @@ async function expireOverdueApprovalsOnStartup() {
       }
     }
     if (changed) persist();
-  } catch (_e) {
+  } catch {
     console.error("Failed to expire overdue approvals:", _e);
   }
 }
@@ -792,7 +793,7 @@ async function registerSlashCommands() {
       ),
     new SlashCommandBuilder()
       .setName("bounty")
-      .setDescription("Create or remove bounties.")
+      .setDescription("Create, remove, or claim bounties.")
       .addSubcommand((sc) =>
         sc
           .setName("add")
@@ -817,7 +818,10 @@ async function registerSlashCommands() {
           .addStringOption((opt) =>
             opt.setName("tribe").setDescription("Tribe name").setRequired(false)
           )
-
+          .addStringOption((opt) =>
+            opt.setName("id").setDescription("Bounty record ID").setRequired(false)
+          )
+      )
       .addSubcommand((sc) =>
         sc
           .setName("claim")
@@ -831,11 +835,8 @@ async function registerSlashCommands() {
           .addStringOption((opt) =>
             opt.setName("notes").setDescription("Optional notes").setRequired(false)
           )
-      )
-          .addStringOption((opt) =>
-            opt.setName("id").setDescription("Bounty record ID").setRequired(false)
-          )
       ),
+
   ].map((c) => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);
@@ -848,7 +849,7 @@ async function registerSlashCommands() {
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
       console.log("✅ Registered global slash commands (can take up to ~1 hour to appear).");
     }
-  } catch (_e) {
+  } catch {
     console.error("Failed to register slash commands:", _e);
   }
 }
@@ -885,7 +886,7 @@ bot.once("clientReady", async () => {
           maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
       }
     }
-  } catch (_e) {
+  } catch {
     console.error("Failed to reschedule timers:", _e);
   }
 });
@@ -1821,7 +1822,7 @@ requests = readJson(REQUESTS_PATH, {});
     if (interaction && !interaction.replied && !interaction.deferred) {
       try {
         await interaction.reply({ content: "Something went wrong.", ephemeral: true });
-      } catch (_e) {
+      } catch {
         // ignore reply errors
       }
     }
