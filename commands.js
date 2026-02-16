@@ -67,78 +67,36 @@ const commands = [
         .setDescription("Role to ping when ending early (OPEN SEASON)")
         .setRequired(true)
     ),
-
-    new SlashCommandBuilder()
-      .setName("bounty")
-      .setDescription("Create, remove, or claim bounties.")
-      .addSubcommand((sc) =>
-        sc
-          .setName("add")
-          .setDescription("Add/refresh a bounty for a tribe (1 week).")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Tribe name").setRequired(true)
-          )
-          .addStringOption((opt) =>
-            opt.setName("ign").setDescription("Bounty target IGN (optional)").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("server").setDescription("Server (optional)").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("reason").setDescription("Reason (optional)").setRequired(false)
-          )
-      )
-      .addSubcommand((sc) =>
-        sc
-          .setName("remove")
-          .setDescription("Remove an active bounty by tribe or by ID.")
-          .addStringOption((opt) =>
-            opt.setName("tribe").setDescription("Tribe name").setRequired(false)
-          )
-          .addStringOption((opt) =>
-            opt.setName("id").setDescription("Bounty record ID").setRequired(false)
-          )
-      )
-      .addSubcommand((sc) =>
+  new SlashCommandBuilder()
+    .setName("rules")
+    .setDescription("Show the White Flag rules (ephemeral)."),
+  new SlashCommandBuilder()
+    .setName("whiteflags")
+    .setDescription("White Flag utilities.")
+          .addSubcommand((sc) =>
         sc
           .setName("claim")
-          .setDescription("Submit a bounty claim (creates a ticket).")
+          .setDescription("Submit proof to claim a bounty reward.")
           .addStringOption((opt) =>
             opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
           )
           .addStringOption((opt) =>
-            opt.setName("ign").setDescription("Your IGN").setRequired(true)
+            opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
           )
           .addStringOption((opt) =>
-            opt.setName("bounty_ign").setDescription("Bounty target IGN").setRequired(true)
+            opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
           )
           .addStringOption((opt) =>
-            opt.setName("proof").setDescription("Link to proof (clip/screenshot)").setRequired(true)
+            opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
           )
-      ),
-  new SlashCommandBuilder()
-    .setName("rules")
-    .setDescription("Show the White Flag rules (ephemeral)."),
-new SlashCommandBuilder()
-  .setName("whiteflags")
-  .setDescription("White Flag utilities.")
-  .addSubcommand((sc) =>
-    sc
-      .setName("claim")
-      .setDescription("Submit proof to claim a bounty reward.")
-      .addStringOption((opt) =>
-        opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
       )
-      .addStringOption((opt) =>
-        opt.setName("ign").setDescription("Your in-game name (IGN)").setRequired(true)
-      )
-      .addStringOption((opt) =>
-        opt.setName("bounty_ign").setDescription("Bounty target's IGN").setRequired(true)
-      )
-      .addStringOption((opt) =>
-        opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
-      )
-  ),
+.addStringOption((opt) =>
+          opt.setName("proof").setDescription("Link to clip/screenshot proof").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName("notes").setDescription("Optional notes").setRequired(false)
+        )
+    ),
 
 ].map((c) => c.toJSON());
 
