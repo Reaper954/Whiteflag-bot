@@ -470,12 +470,14 @@ function scheduleBountyExpiry(requestId) {
 
   const t = setTimeout(async () => {
     try {
+      // Re-read latest in case of changes
       requests = readJson(REQUESTS_PATH, {});
       const r = requests[requestId];
       if (!r || !r.bounty) return;
 
       const now2 = Date.now();
-      if (!(r.bounty.active && typeof r.bounty.endsAt === "number" && r.bounty.endsAt <= now2)) return;
+      // Only expire if it is actually due and still active
+      if (!(r.bounty.active === true && typeof r.bounty.endsAt === "number" && r.bounty.endsAt <= now2)) return;
 
       r.bounty.active = false;
       r.bounty.expiredAt = now2;
@@ -485,9 +487,62 @@ function scheduleBountyExpiry(requestId) {
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
 
+      // Announce bounty closed (optional)
       const announceCh = await safeFetchChannel(guild, state.announceChannelId);
+      if (announceCh && isTextChannel(announceCh)) {
+        await announceCh.send(
+          `🏁 **BOUNTY CLOSED** — Target cleared for **${escapeMd(r.tribeName)}** (IGN: **${escapeMd(
+            r.ign
+          )}**, Server: **${escapeMd(r.serverType || r.cluster || "N/A")}**).`
+        );
+      }
+
+      // Disable the bounty announcement button (if stored)
+      try {
+        const chId = r.bounty.announceChannelId;
+        const msgId = r.bounty.announceMessageId;
+        if (chId && msgId) {
+          const bountyCh = await guild.channels.fetch(chId).catch(() => null);
+          if (bountyCh && isTextChannel(bountyCh)) {
+            const msg = await bountyCh.messages.fetch(msgId).catch(() => null);
+            if (msg) {
+              await msg.edit({ content: msg.content + "\n🏁 **CLOSED**", components: [] }).catch(() => null);
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+    } catch (e) {
+      console.error("Bounty expiry failed:", e);
+    } finally {
+      activeBountyTimeouts.delete(requestId);
+    }
+  }, delay);
+
+  activeBountyTimeouts.set(requestId, t);
 }
+
+async function approveBountyClaim(interaction, claimId) {
+  const claim = claims[claimId];
+  if (!claim) {
+    return interaction.reply({ content: "Claim not found.", flags: 64 });
   }
+
+  const req = requests[claim.bountyRecordId];
+  if (!req) {
+    return interaction.reply({ content: "Bounty record not found.", flags: 64 });
+  }
+
+  claim.status = "approved";
+  claim.approvedAt = Date.now();
+  claim.approvedBy = interaction.user.id;
+  claims[claimId] = claim;
+
+  req.bounty.claimStatus = "approved";
+  requests[claim.bountyRecordId] = req;
+  persistClaims();
+  persist();
 
   // Disable buttons on the claim message
   const row = new ActionRowBuilder().addComponents(
@@ -540,6 +595,111 @@ return interaction.update({
     components: [row],
   });
 }
+
+// -------------------- Interaction handler --------------------
+bot.on("interactionCreate", async (interaction) => {
+  try {
+    // Button interactions
+    if (interaction.isButton()) {
+      // Bounty claim approve/deny
+      if (interaction.customId.startsWith("bounty_claim_approve:")) {
+        const claimId = interaction.customId.split(":")[1];
+        return approveBountyClaim(interaction, claimId);
+      }
+
+      if (interaction.customId.startsWith("bounty_claim_deny:")) {
+        const claimId = interaction.customId.split(":")[1];
+        const claim = claims[claimId];
+        if (!claim) {
+          return interaction.reply({ content: "Claim not found.", flags: 64 });
+        }
+
+        const req = requests[claim.bountyRecordId];
+        if (!req) {
+          return interaction.reply({ content: "Bounty record not found.", flags: 64 });
+        }
+
+        claim.status = "denied";
+        claim.deniedAt = Date.now();
+        claim.deniedBy = interaction.user.id;
+        claims[claimId] = claim;
+
+        req.bounty.claimStatus = "denied";
+        requests[claim.bountyRecordId] = req;
+        persistClaims();
+        persist();
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`bounty_claim_deny:${claimId}`)
+            .setLabel("Denied")
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(true),
+          new ButtonBuilder()
+            .setCustomId(`bounty_claim_approve:${claimId}`)
+            .setLabel("Approve")
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(true)
+        );
+
+        return interaction.update({
+          content: interaction.message.content,
+          embeds: interaction.message.embeds,
+          components: [row],
+        });
+      }
+
+      // Bounty claim open
+      if (interaction.customId.startsWith("bounty_claim_open:")) {
+        if (!interaction.guild) {
+          return interaction.reply({ content: "Guild only.", flags: 64 });
+        }
+
+        const recordId = interaction.customId.split(":")[1];
+        requests = readJson(REQUESTS_PATH, {});
+        const target = requests[recordId];
+        const now = Date.now();
+
+        if (!target || !hasActiveBounty(target, now)) {
+          return interaction.reply({
+            content: "This bounty is no longer active.",
+            flags: 64,
+          });
+        }
+
+        const modal = new ModalBuilder()
+          .setCustomId(`bounty_claim_submit:${recordId}`)
+          .setTitle("Claim Bounty");
+
+        const ign = new TextInputBuilder()
+          .setCustomId("ign")
+          .setLabel("Your IGN")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(64);
+
+        const bountyIgn = new TextInputBuilder()
+          .setCustomId("bounty_ign")
+          .setLabel("Target IGN (the one you killed)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(64);
+
+        const proof = new TextInputBuilder()
+          .setCustomId("proof")
+          .setLabel("Proof (screenshot URL, etc.)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(256);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(ign),
+          new ActionRowBuilder().addComponents(bountyIgn),
+          new ActionRowBuilder().addComponents(proof)
+        );
+
+        return interaction.showModal(modal);
+      }
 
       // Rules accept
       if (interaction.customId === CID.RULES_ACCEPT) {
