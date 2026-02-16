@@ -1296,8 +1296,7 @@ try {
     const bountyCh = await guild.channels.fetch(chId).catch(() => null);
     if (bountyCh && isTextChannel(bountyCh)) {
       const msg = await bountyCh.messages.fetch(msgId).catch(() => null);
-      if (msg) await msg.edit({ content: msg.content + "
-🛑 **CANCELED**", components: [] }).catch(() => null);
+      if (msg) await msg.edit({ content: msg.content + "\n🛑 **CANCELED**", components: [] }).catch(() => null);
     }
   }
 } catch {
