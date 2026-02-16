@@ -1198,15 +1198,25 @@ requests = readJson(REQUESTS_PATH, {});
           scheduleBountyExpiryWarning(id);
           maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
-          const announceCh = await safeFetchChannel(guild, state.announceChannelId);
-          if (announceCh && isTextChannel(announceCh)) {
-            await announceCh.send(
-              `🎯 **BOUNTY ISSUED** — **${escapeMd(record.tribeName)}** (IGN: **${escapeMd(
-                record.ign
-              )}**, Server: **${escapeMd(record.serverType)}**) — ends ${fmtDiscordRelativeTime(
-                record.bounty.endsAt
-              )}.`
+          const bountyCh = await safeFetchChannel(
+            guild,
+            state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
+          );
+          if (bountyCh && isTextChannel(bountyCh)) {
+            const claimRow = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId(`bounty_claim_open:${record.id}`)
+                .setLabel("Claim Bounty")
+                .setStyle(ButtonStyle.Primary)
             );
+
+            await bountyCh.send({
+              content:
+                `🎯 **BOUNTY ISSUED** — **${escapeMd(record.tribeName)}** ` +
+                `(IGN: **${escapeMd(record.ign)}**, Server: **${escapeMd(record.serverType)}**) — ` +
+                `Reward: **${BOUNTY_REWARD}** — ends ${fmtDiscordRelativeTime(record.bounty.endsAt)}.`,
+              components: [claimRow],
+            });
           }
 
           return interaction.reply({
@@ -1680,9 +1690,37 @@ requests = readJson(REQUESTS_PATH, {});
 
           if (announceCh && isTextChannel(announceCh)) {
             await announceCh.send(
-              `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — Protection TERMINATED for **${escapeMd(req.tribeName)}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(req.serverType || req.cluster || "N/A")}**).
-🎯 **BOUNTY ISSUED** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`
+              `<@&${state.openSeasonRoleId}> 🚨 **OPEN SEASON** — Protection TERMINATED for **${escapeMd(
+                req.tribeName
+              )}** (IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
+                req.serverType || req.cluster || "N/A"
+              )}**).`
             );
+
+            const bountyCh = await safeFetchChannel(
+              guild,
+              state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
+            ).catch(() => null);
+
+            if (bountyCh && isTextChannel(bountyCh)) {
+              const claimRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`bounty_claim_open:${req.id}`)
+                  .setLabel("Claim Bounty")
+                  .setStyle(ButtonStyle.Primary)
+              );
+
+              await bountyCh.send({
+                content:
+                  `🎯 **BOUNTY ISSUED** — **${escapeMd(req.tribeName)}** ` +
+                  `(IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
+                    req.serverType || req.cluster || "N/A"
+                  )}**) — Reward: **${BOUNTY_REWARD}** — Duration: **14 days** — Ends ${fmtDiscordRelativeTime(
+                    req.bounty.endsAt
+                  )}.`,
+                components: [claimRow],
+              });
+            }
           }
 
           // Update admin message: disable end early
