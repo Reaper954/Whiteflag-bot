@@ -1181,8 +1181,8 @@ try {
           );
           const bountyMsg = await bountyCh.send({
             content:
-              `${state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : ``}🎯 **BOUNTY HAS BEEN ISSUED FOR****${escapeMd(req.tribeName)}** ` +
-              `(IGN: **${escapeMd(req.ign || "N/A")}**, Server: **${escapeMd(req.serverType || "N/A")}**) — ` +
+              `${state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : ``}🎯 **BOUNTY HAS BEEN ISSUED FOR** **${escapeMd(req.tribeName)}** ` +
+              `**, Server: **${escapeMd(req.serverType || "N/A")}**) — ` +
               `Reward: **${BOUNTY_REWARD}** — ends ${fmtDiscordRelativeTime(req.bounty.endsAt)}.`,
             components: [claimRow],
           });
