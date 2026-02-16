@@ -910,7 +910,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1223,7 +1223,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
               interaction.guild,
@@ -1237,13 +1237,20 @@ requests = readJson(REQUESTS_PATH, {});
                 .setStyle(ButtonStyle.Primary)
             );
 
-            await bountyCh.send({
+            const bountyMsg = await bountyCh.send({
               content:
                 `🎯 **BOUNTY ISSUED** — **${escapeMd(record.tribeName)}** ` +
                 `(IGN: **${escapeMd(record.ign)}**, Server: **${escapeMd(record.serverType)}**) — ` +
                 `Reward: **${BOUNTY_REWARD}** — ends ${fmtDiscordRelativeTime(record.bounty.endsAt)}.`,
               components: [claimRow],
             });
+            // Store the announcement message so we can disable it when claimed/removed
+            if (requests[record.id] && requests[record.id].bounty) {
+              requests[record.id].bounty.announceChannelId = bountyCh.id;
+              requests[record.id].bounty.announceMessageId = bountyMsg.id;
+              persist();
+            }
+
           }
 
           return interaction.reply({
@@ -1279,6 +1286,23 @@ requests = readJson(REQUESTS_PATH, {});
           target.bounty.active = false;
           target.bounty.removedAt = Date.now();
           target.bounty.removedBy = interaction.user.id;
+
+
+// Disable the bounty announcement button (if stored)
+try {
+  const chId = target.bounty.announceChannelId;
+  const msgId = target.bounty.announceMessageId;
+  if (chId && msgId) {
+    const bountyCh = await guild.channels.fetch(chId).catch(() => null);
+    if (bountyCh && isTextChannel(bountyCh)) {
+      const msg = await bountyCh.messages.fetch(msgId).catch(() => null);
+      if (msg) await msg.edit({ content: msg.content + "
+🛑 **CANCELED**", components: [] }).catch(() => null);
+    }
+  }
+} catch {
+  // ignore
+}
 
           requests[target.id] = target;
           persist();
@@ -1428,6 +1452,147 @@ requests = readJson(REQUESTS_PATH, {});
         return interaction.showModal(modal);
       }
 
+
+
+// ---- Admin: approve/deny bounty claims ----
+if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.customId.startsWith("bounty_claim_deny:")) {
+  if (!interaction.guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+
+  // Enforce admin channel if configured
+  if (state.adminChannelId && interaction.channelId !== state.adminChannelId) {
+    return interaction.reply({ content: "Admin actions must be used in the admin review channel.", ephemeral: true });
+  }
+
+  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  const isAdminPerm = member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+  const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
+
+  if (!isAdminPerm && !hasAdminRole) {
+    return interaction.reply({ content: "Admins only.", ephemeral: true });
+  }
+
+  const action = interaction.customId.split(":")[0]; // bounty_claim_approve / bounty_claim_deny
+  const claimId = interaction.customId.split(":")[1];
+
+  claims = readJson(CLAIMS_PATH, {});
+  requests = readJson(REQUESTS_PATH, {});
+  const claim = claims[claimId];
+
+  if (!claim) {
+    return interaction.reply({ content: "Claim not found (maybe already handled).", ephemeral: true });
+  }
+  if (claim.status && claim.status !== "pending") {
+    return interaction.reply({ content: `Claim already **${claim.status}**.`, ephemeral: true });
+  }
+
+  const record = requests[claim.bountyRecordId];
+
+  if (action === "bounty_claim_deny") {
+    claim.status = "denied";
+    claim.deniedAt = Date.now();
+    claim.deniedBy = interaction.user.id;
+    claims[claimId] = claim;
+    persistClaims();
+
+    // Disable buttons on the claim message
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`bounty_claim_deny:${claimId}`)
+        .setLabel("Denied")
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId(`bounty_claim_approve:${claimId}`)
+        .setLabel("Approve")
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true)
+    );
+
+    return interaction.update({
+      content: interaction.message.content,
+      embeds: interaction.message.embeds,
+      components: [row],
+    });
+  }
+
+  // Approve
+  claim.status = "approved";
+  claim.approvedAt = Date.now();
+  claim.approvedBy = interaction.user.id;
+  claims[claimId] = claim;
+  persistClaims();
+
+  // Close the bounty automatically
+  if (record && record.bounty) {
+    // Cancel timers
+    const t1 = activeBountyTimeouts.get(record.id);
+    if (t1) clearTimeout(t1);
+    activeBountyTimeouts.delete(record.id);
+
+    const t2 = activeBountyAlertTimeouts.get(record.id);
+    if (t2) clearTimeout(t2);
+    activeBountyAlertTimeouts.delete(record.id);
+
+    record.bounty.active = false;
+    record.bounty.claimedAt = Date.now();
+    record.bounty.claimedBy = interaction.user.id;
+    record.bounty.claimId = claimId;
+
+    requests[record.id] = record;
+    persist();
+
+    // Remove/disable the "Claim Bounty" button on the bounty announcement (if we have it stored)
+    try {
+      const chId = record.bounty.announceChannelId;
+      const msgId = record.bounty.announceMessageId;
+      if (chId && msgId) {
+        const bountyCh = await interaction.guild.channels.fetch(chId).catch(() => null);
+        if (bountyCh && isTextChannel(bountyCh)) {
+          const msg = await bountyCh.messages.fetch(msgId).catch(() => null);
+          if (msg) {
+            await msg.edit({
+              content:
+                msg.content +
+                `\n✅ **CLAIMED** by <@${claim.submittedBy}> — approved by <@${interaction.user.id}>.`,
+              components: [],
+            }).catch(() => null);
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // Announce closure (no ping)
+    const announceCh = await safeFetchChannel(interaction.guild, state.announceChannelId);
+    if (announceCh && isTextChannel(announceCh)) {
+      await announceCh.send(
+        `🏁 **BOUNTY CLAIM APPROVED** — **${escapeMd(record.tribeName)}** bounty closed. ` +
+        `Claimant: <@${claim.submittedBy}> — Reward: **${BOUNTY_REWARD}**.`
+      );
+    }
+  }
+
+  // Disable buttons on the claim message
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`bounty_claim_deny:${claimId}`)
+      .setLabel("Deny")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(`bounty_claim_approve:${claimId}`)
+      .setLabel("Approved")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(true)
+  );
+
+  return interaction.update({
+    content: interaction.message.content,
+    embeds: interaction.message.embeds,
+    components: [row],
+  });
+}
 
       // Rules accept
       if (interaction.customId === CID.RULES_ACCEPT) {
@@ -1744,7 +1909,7 @@ requests = readJson(REQUESTS_PATH, {});
                   .setStyle(ButtonStyle.Primary)
               );
 
-              await bountyCh.send({
+              const bountyMsg = await bountyCh.send({
                 content:
                   `🎯 **BOUNTY ISSUED** — **${escapeMd(req.tribeName)}** ` +
                   `(IGN: **${escapeMd(req.ign)}**, Server: **${escapeMd(
@@ -1754,6 +1919,13 @@ requests = readJson(REQUESTS_PATH, {});
                   )}.`,
                 components: [claimRow],
               });
+            // Store the announcement message so we can disable it when claimed/removed
+            if (requests[record.id] && requests[record.id].bounty) {
+              requests[record.id].bounty.announceChannelId = bountyCh.id;
+              requests[record.id].bounty.announceMessageId = bountyMsg.id;
+              persist();
+            }
+
             }
           }
 
