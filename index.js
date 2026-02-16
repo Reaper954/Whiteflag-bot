@@ -258,6 +258,19 @@ async function safeFetchChannel(guild, channelId) {
   return guild.channels.fetch(channelId).catch(() => null);
 }
 
+
+async function safeDmUser(client, userId, content) {
+  try {
+    if (!userId) return false;
+    const user = await client.users.fetch(userId).catch(() => null);
+    if (!user) return false;
+    await user.send(content).catch(() => null);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // -------------------- Timers --------------------
 const activeTimeouts = new Map();
 const activeBountyTimeouts = new Map();
@@ -285,6 +298,9 @@ function scheduleExpiry(requestId) {
       r.expiredAt = Date.now();
       requests[requestId] = r;
       persistAll();
+
+      // DM requester
+      await safeDmUser(bot, r.requestedBy, `⏳ Your White Flag protection for **${escapeMd(r.tribeName)}** has **EXPIRED**.`);
 
       const guild = await safeFetchGuild(bot);
       if (!guild) return;
@@ -631,7 +647,7 @@ const bot = new Client({
 });
 
 bot.once("clientReady", async () => {
-  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v3_claimlog_channel`);
+  console.log(`✅ Logged in as ${bot.user.tag} — build clean_v4_dm_restore`);
 
   await registerSlashCommandsOnStartup();
   await expireOverdueOnStartup();
@@ -1049,6 +1065,8 @@ bot.on("interactionCreate", async (interaction) => {
           req.deniedBy = interaction.user.id;
           requests[requestId] = req;
           persistAll();
+          // DM requester
+          await safeDmUser(bot, req.requestedBy, `❌ Your White Flag request for **${escapeMd(req.tribeName)}** was **DENIED**.`);
 
 // Disable buttons on the admin review message
 try {
@@ -1086,6 +1104,9 @@ try {
         req.approvedBy = interaction.user.id;
         requests[requestId] = req;
         persistAll();
+
+        // DM requester
+        await safeDmUser(bot, req.requestedBy, `✅ Your White Flag request for **${escapeMd(req.tribeName)}** was **APPROVED**. Protection ends ${fmtDiscordRelativeTime(req.approvedAt + SEVEN_DAYS_MS)}.`);
 
         scheduleExpiry(requestId);
         scheduleWhiteFlagExpiryWarning(requestId);
@@ -1143,6 +1164,9 @@ try {
 
         requests[requestId] = req;
         persistAll();
+
+        // DM requester
+        await safeDmUser(bot, req.requestedBy, `🛑 Your White Flag for **${escapeMd(req.tribeName)}** was **ENDED EARLY** by admins. Open Season is active and a bounty has been issued.`);
 
         scheduleBountyExpiry(requestId);
         scheduleBountyExpiryWarning(requestId);
@@ -1255,6 +1279,7 @@ try {
             `Tribe: **${escapeMd(claim.tribeName)}**\n` +
             `Target IGN (claimed): **${escapeMd(claim.bountyTargetIgn)}**\n` +
             `Claimant IGN: **${escapeMd(claim.claimantIgn)}**\n` +
+            `Reward: **${BOUNTY_REWARD}**\n` +
             `Approved by: <@${interaction.user.id}>\n` +
             `Submitted by: <@${claim.submittedBy}>\n` +
             `Proof: ${claim.proof}\n` +
@@ -1275,7 +1300,7 @@ try {
     if (!outCh || bountyCh.id !== outCh.id) {
       await bountyCh.send(
         `🏁 **BOUNTY CLAIMED** — **${escapeMd(claim.tribeName)}** ` +
-          `Claimed by: <@${claim.submittedBy}> Reward: **${BOUNTY_REWARD}**.`
+          `Reward: **${BOUNTY_REWARD}** — Claimant: <@${claim.submittedBy}>.`
       );
     }
   }
