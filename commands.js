@@ -1,9 +1,9 @@
 // commands.js
-// Slash command deploy script for the White Flag bot (Discord.js v14).
+// Slash command deploy script for the White Flag / Bounty bot (Discord.js v14).
 //
 // Env:
 //   DISCORD_TOKEN (required)
-//   CLIENT_ID    (required) - your application's client id
+//   CLIENT_ID    (required)
 //   GUILD_ID     (optional) - if set, registers to that guild instantly; otherwise registers globally
 //
 // Run:
@@ -11,7 +11,6 @@
 //
 // Notes:
 // - Global command updates can take up to ~1 hour to appear in Discord.
-// - /setup is still guarded in the bot code to require Administrator.
 
 require("dotenv").config();
 const { REST, Routes, SlashCommandBuilder } = require("discord.js");
@@ -53,12 +52,6 @@ const commands = [
         .setDescription("Channel to announce OPEN SEASON pings")
         .setRequired(true)
     )
-    .addChannelOption((opt) =>
-      opt
-        .setName("bounty_channel")
-        .setDescription("Channel to announce bounties (optional)")
-        .setRequired(false)
-    )
     .addRoleOption((opt) =>
       opt
         .setName("admin_role")
@@ -70,6 +63,12 @@ const commands = [
         .setName("open_season_role")
         .setDescription("Role to ping when ending early (OPEN SEASON)")
         .setRequired(true)
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("bounty_channel")
+        .setDescription("Channel to announce bounties (optional)")
+        .setRequired(false)
     ),
 
   new SlashCommandBuilder().setName("rules").setDescription("Show the White Flag rules (ephemeral)."),
@@ -77,9 +76,7 @@ const commands = [
   new SlashCommandBuilder()
     .setName("whiteflags")
     .setDescription("White Flag utilities.")
-    .addSubcommand((sc) =>
-      sc.setName("active").setDescription("Show all approved and active White Flags.")
-    ),
+    .addSubcommand((sc) => sc.setName("active").setDescription("Show all approved and active White Flags.")),
 
   new SlashCommandBuilder()
     .setName("bounty")
@@ -88,55 +85,77 @@ const commands = [
       sc
         .setName("add")
         .setDescription("Add/refresh a bounty for a tribe (1 week).")
-        .addStringOption((opt) =>
-          opt.setName("tribe").setDescription("Tribe name").setRequired(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName("ign").setDescription("Bounty target IGN (optional)").setRequired(false)
-        )
-        .addStringOption((opt) =>
-          opt.setName("server").setDescription("Server/Cluster (optional)").setRequired(false)
-        )
-        .addStringOption((opt) =>
-          opt.setName("reason").setDescription("Reason (optional)").setRequired(false)
-        )
+        .addStringOption((opt) => opt.setName("tribe").setDescription("Tribe name").setRequired(true))
+        .addStringOption((opt) => opt.setName("ign").setDescription("Bounty target IGN (optional)").setRequired(false))
+        .addStringOption((opt) => opt.setName("server").setDescription("Server/Cluster (optional)").setRequired(false))
+        .addStringOption((opt) => opt.setName("reason").setDescription("Reason (optional)").setRequired(false))
     )
     .addSubcommand((sc) =>
       sc
         .setName("remove")
         .setDescription("Remove an active bounty by tribe or by ID.")
-        .addStringOption((opt) =>
-          opt.setName("tribe").setDescription("Tribe name").setRequired(false)
-        )
-        .addStringOption((opt) =>
-          opt.setName("id").setDescription("Bounty record ID").setRequired(false)
-        )
+        .addStringOption((opt) => opt.setName("tribe").setDescription("Tribe name").setRequired(false))
+        .addStringOption((opt) => opt.setName("id").setDescription("Bounty record ID").setRequired(false))
     )
     .addSubcommand((sc) =>
       sc
         .setName("claim")
         .setDescription("Submit a bounty claim (admin review).")
-        .addStringOption((opt) =>
-          opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName("ign").setDescription("Your IGN").setRequired(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName("bounty_ign").setDescription("Bounty target IGN").setRequired(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName("proof").setDescription("Proof link (clip/screenshot)").setRequired(true)
-        )
-        .addStringOption((opt) =>
-          opt.setName("notes").setDescription("Optional notes for admins").setRequired(false)
-        )
-    ),
+        .addStringOption((opt) => opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true))
+        .addStringOption((opt) => opt.setName("ign").setDescription("Your IGN").setRequired(true))
+        .addStringOption((opt) => opt.setName("bounty_ign").setDescription("Bounty target IGN").setRequired(true))
+        .addStringOption((opt) => opt.setName("proof").setDescription("Proof link (clip/screenshot)").setRequired(true))
+        .addStringOption((opt) => opt.setName("notes").setDescription("Optional notes for admins").setRequired(false))
+)
+.addSubcommand((sc) =>
+  sc
+    .setName("status")
+    .setDescription("Check the status of a bounty by tribe or ID.")
+    .addStringOption((opt) => opt.setName("tribe").setDescription("Tribe name").setRequired(false))
+    .addStringOption((opt) => opt.setName("id").setDescription("Bounty record ID").setRequired(false))
+),
 
   new SlashCommandBuilder()
     .setName("bounties")
     .setDescription("Bounty utilities.")
     .addSubcommand((sc) => sc.setName("active").setDescription("Show all active bounties.")),
+
+new SlashCommandBuilder()
+  .setName("admin")
+  .setDescription("Admin dashboard.")
+  .addSubcommand((sc) =>
+    sc
+      .setName("bounties")
+      .setDescription("Show bounty dashboard (active/expired/pending claims).")
+      .addStringOption((opt) =>
+        opt
+          .setName("filter")
+          .setDescription("Which bounties to show")
+          .setRequired(false)
+          .addChoices(
+            { name: "active", value: "active" },
+            { name: "expired", value: "expired" },
+            { name: "all", value: "all" }
+          )
+      )
+  )
+  .addSubcommand((sc) =>
+    sc
+      .setName("claims")
+      .setDescription("Show bounty claims dashboard.")
+      .addStringOption((opt) =>
+        opt
+          .setName("filter")
+          .setDescription("Which claims to show")
+          .setRequired(false)
+          .addChoices(
+            { name: "pending", value: "pending" },
+            { name: "approved", value: "approved" },
+            { name: "denied", value: "denied" },
+            { name: "all", value: "all" }
+          )
+      )
+  ),
 
   new SlashCommandBuilder()
     .setName("tribe")
@@ -145,9 +164,7 @@ const commands = [
       sc
         .setName("endwhiteflag")
         .setDescription("End a tribe's White Flag early (OPEN SEASON + bounty).")
-        .addStringOption((opt) =>
-          opt.setName("id").setDescription("White Flag record ID").setRequired(true)
-        )
+        .addStringOption((opt) => opt.setName("id").setDescription("White Flag record ID").setRequired(true))
     ),
 ].map((c) => c.toJSON());
 

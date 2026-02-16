@@ -74,16 +74,61 @@ function readJson(filePath, fallback) {
     if (!fs.existsSync(filePath)) return fallback;
     const raw = fs.readFileSync(filePath, "utf8");
     return JSON.parse(raw);
-  } catch {
+  } catch (_e) {
+    // Attempt recovery from most recent backup (if any)
+    try {
+      const backupDir = path.join(DATA_DIR, "backups");
+      const base = path.basename(filePath);
+      if (fs.existsSync(backupDir)) {
+        const candidates = fs
+          .readdirSync(backupDir)
+          .filter((n) => n.startsWith(`${base}.`) && n.endsWith(".bak"))
+          .sort()
+          .reverse();
+        if (candidates.length) {
+          const raw2 = fs.readFileSync(path.join(backupDir, candidates[0]), "utf8");
+          return JSON.parse(raw2);
+        }
+      }
+    } catch {
+      // ignore
+    }
     return fallback;
   }
 }
 
 function writeJson(filePath, obj) {
   const tmp = `${filePath}.tmp`;
+
+  // Backup previous version
+  try {
+    if (fs.existsSync(filePath)) {
+      const backupDir = path.join(DATA_DIR, "backups");
+      fs.mkdirSync(backupDir, { recursive: true });
+      const base = path.basename(filePath);
+      const stamp = Date.now().toString();
+      const backupPath = path.join(backupDir, `${base}.${stamp}.bak`);
+      fs.copyFileSync(filePath, backupPath);
+
+      // Keep only the last 10 backups per file
+      const keep = 10;
+      const candidates = fs
+        .readdirSync(backupDir)
+        .filter((n) => n.startsWith(`${base}.`) && n.endsWith(".bak"))
+        .sort()
+        .reverse();
+      for (const old of candidates.slice(keep)) {
+        fs.unlinkSync(path.join(backupDir, old));
+      }
+    }
+  } catch {
+    // ignore backup failures
+  }
+
   fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), "utf8");
   fs.renameSync(tmp, filePath);
 }
+
 
 // -------------------- Global persisted config --------------------
 /**
@@ -842,7 +887,19 @@ async function registerSlashCommands() {
           .addStringOption((opt) =>
             opt.setName("proof").setDescription("Submit proof in a ticket)").setRequired(true)
           )
-      ),
+    )
+    .addSubcommand((sc) =>
+      sc
+        .setName("status")
+        .setDescription("Check the status of a bounty by tribe or ID.")
+        .addStringOption((opt) =>
+          opt.setName("tribe").setDescription("Tribe name").setRequired(false)
+        )
+        .addStringOption((opt) =>
+          opt.setName("id").setDescription("Bounty record ID").setRequired(false)
+        )
+    ),
+
 
     new SlashCommandBuilder()
       .setName("bounties")
@@ -852,6 +909,43 @@ async function registerSlashCommands() {
       ),
 
     new SlashCommandBuilder()
+  .setName("admin")
+  .setDescription("Admin dashboard.")
+  .addSubcommand((sc) =>
+    sc
+      .setName("bounties")
+      .setDescription("Show bounty dashboard (active/expired/pending claims).")
+      .addStringOption((opt) =>
+        opt
+          .setName("filter")
+          .setDescription("Which bounties to show")
+          .setRequired(false)
+          .addChoices(
+            { name: "active", value: "active" },
+            { name: "expired", value: "expired" },
+            { name: "all", value: "all" }
+          )
+      )
+  )
+  .addSubcommand((sc) =>
+    sc
+      .setName("claims")
+      .setDescription("Show bounty claims dashboard.")
+      .addStringOption((opt) =>
+        opt
+          .setName("filter")
+          .setDescription("Which claims to show")
+          .setRequired(false)
+          .addChoices(
+            { name: "pending", value: "pending" },
+            { name: "approved", value: "approved" },
+            { name: "denied", value: "denied" },
+            { name: "all", value: "all" }
+          )
+      )
+  ),
+
+new SlashCommandBuilder()
       .setName("tribe")
       .setDescription("Admin tribe utilities.")
       .addSubcommand((sc) =>
@@ -1040,6 +1134,76 @@ requests = readJson(REQUESTS_PATH, {});
         return interaction.reply({ embeds: [embed], flags: 64});
       }
     }
+      if (interaction.commandName === "admin") {
+              const guild = interaction.guild;
+              if (!guild) return interaction.reply({ content: "Guild only.", flags: 64 });
+
+              const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+              const isAdminPerm =
+                member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+              const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
+
+              if (!isAdminPerm && !hasAdminRole) {
+                return interaction.reply({ content: "Admins only.", flags: 64 });
+              }
+
+              const sub = interaction.options.getSubcommand();
+              const filter = (interaction.options.getString("filter") || "active").toLowerCase();
+
+              requests = readJson(REQUESTS_PATH, {});
+              claims = readJson(CLAIMS_PATH, {});
+
+              if (sub === "bounties") {
+                const now = Date.now();
+                const all = Object.values(requests).filter((r) => r?.bounty);
+                const active = all.filter((r) => hasActiveBounty(r, now));
+                const expired = all.filter((r) => r?.bounty?.expiredAt || (r?.bounty?.active === false && r?.bounty?.endsAt && r.bounty.endsAt <= now));
+                const pendingClaims = Object.values(claims).filter((c) => c?.status === "pending");
+
+                let list = [];
+                if (filter === "active") list = active;
+                else if (filter === "expired") list = expired;
+                else list = all;
+
+                const lines = list.slice(0, 25).map((r) => {
+                  const st = hasActiveBounty(r, now) ? "ACTIVE" : (r?.bounty?.expiredAt ? "EXPIRED" : "INACTIVE");
+                  const claimSt = r?.bounty?.claimStatus || "none";
+                  const ends = r?.bounty?.endsAt ? fmtDiscordRelativeTime(r.bounty.endsAt) : "N/A";
+                  return `• **${escapeMd(r.tribeName)}** — ${st} — claim: **${escapeMd(claimSt)}** — ends ${ends} — ID: \`${r.id}\``;
+                });
+
+                return interaction.reply({
+                  content:
+                    `🧭 **Bounty Dashboard**\n` +
+                    `Active: **${active.length}** | Expired/Inactive: **${expired.length}** | Pending Claims: **${pendingClaims.length}**\n` +
+                    (lines.length ? lines.join("\n") : "_No bounties found for that filter._"),
+                  flags: 64,
+                });
+              }
+
+              if (sub === "claims") {
+                const all = Object.values(claims);
+                let list = [];
+                if (filter === "pending") list = all.filter((c) => c?.status === "pending");
+                else if (filter === "approved") list = all.filter((c) => c?.status === "approved");
+                else if (filter === "denied") list = all.filter((c) => c?.status === "denied");
+                else list = all;
+
+                const lines = list.slice(0, 25).map((c) => {
+                  return `• **${escapeMd(c.tribeName)}** — **${escapeMd(c.status || "unknown")}** — by <@${c.submittedBy}> — Claim ID: \`${c.id}\``;
+                });
+
+                return interaction.reply({
+                  content:
+                    `🧾 **Claims Dashboard** (filter: **${escapeMd(filter)}**)\n` +
+                    (lines.length ? lines.join("\n") : "_No claims found._"),
+                  flags: 64,
+                });
+              }
+
+              return interaction.reply({ content: "Unknown admin subcommand.", flags: 64 });
+            }
+
       if (interaction.commandName === "bounties" && interaction.options.getSubcommand() === "active") {
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
@@ -1080,19 +1244,58 @@ requests = readJson(REQUESTS_PATH, {});
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
-        const member = await guild.members.fetch(interaction.user.id).catch(() => null);
-        const isAdminPerm =
-          member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
-        const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
+                const member = await guild.members.fetch(interaction.user.id).catch(() => null);
+                const isAdminPerm =
+                  member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+                const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
-        if (!isAdminPerm && !hasAdminRole) {
-          return interaction.reply({ content: "Admins only.", flags: 64});
-        }
+                const sub = interaction.options.getSubcommand();
 
-        const sub = interaction.options.getSubcommand();
+                // Only bounty add/remove are admin-only. Players can use claim/status.
+                if (sub === "add" || sub === "remove") {
+                  if (!isAdminPerm && !hasAdminRole) {
+                    return interaction.reply({ content: "Admins only.", flags: 64 });
+                  }
+                }
+                if (sub === "status") {
+                  const tribe = (interaction.options.getString("tribe") || "").trim();
+                  const id = (interaction.options.getString("id") || "").trim();
 
-        if (sub === "claim") {
+                  if (!tribe && !id) {
+                    return interaction.reply({ content: "Provide either **tribe** or **id**.", flags: 64 });
+                  }
+
+                  requests = readJson(REQUESTS_PATH, {});
+                  const target = id ? (requests[id] || null) : findActiveBountyByTribe(tribe);
+
+                  if (!target) {
+                    return interaction.reply({ content: "No bounty found for that input.", flags: 64 });
+                  }
+
+                  const now = Date.now();
+                  const isActive = hasActiveBounty(target, now);
+                  const endsAt = target?.bounty?.endsAt || null;
+                  const status = isActive ? "ACTIVE" : (target?.bounty?.expiredAt ? "EXPIRED" : "INACTIVE");
+                  const claimStatus = target?.bounty?.claimStatus || "none";
+
+                  return interaction.reply({
+                    content:
+                      `🎯 **Bounty Status**\n` +
+                      `Tribe: **${escapeMd(target.tribeName)}**\n` +
+                      `IGN: **${escapeMd(target.ign || "N/A")}**\n` +
+                      `Server: **${escapeMd(target.serverType || "N/A")}**\n` +
+                      `Status: **${status}**\n` +
+                      (endsAt ? `Ends: ${fmtDiscordRelativeTime(endsAt)}\n` : "") +
+                      `Claim: **${escapeMd(claimStatus)}**\n` +
+                      `Record ID: \`${target.id}\``,
+                    flags: 64,
+                  });
+                }
+
+if (sub === "claim") {
           const tribe = interaction.options.getString("tribe", true).trim();
+          const ign = interaction.options.getString("ign", true).trim();
+          const bountyIgn = interaction.options.getString("bounty_ign", true).trim();
           const proof = interaction.options.getString("proof", true).trim();
           const notes = (interaction.options.getString("notes") || "").trim();
 
@@ -1105,6 +1308,19 @@ requests = readJson(REQUESTS_PATH, {});
               content: "No active bounty found for that tribe.",
               flags: 64});
           }
+if (target?.bounty?.claimStatus === "pending") {
+  return interaction.reply({
+    content: "A claim for this bounty is already pending admin review.",
+    flags: 64,
+  });
+}
+if (target?.bounty?.claimStatus === "approved") {
+  return interaction.reply({
+    content: "This bounty has already been claimed.",
+    flags: 64,
+  });
+}
+
 
           const claimId = newClaimId();
           const now = Date.now();
@@ -1115,12 +1331,21 @@ requests = readJson(REQUESTS_PATH, {});
             reward: BOUNTY_REWARD,
             submittedBy: interaction.user.id,
             submittedAt: now,
+            claimantIgn: ign,
+            bountyTargetIgn: bountyIgn,
             proof,
             notes,
             status: "pending",
           };
 
           claims[claimId] = claim;
+          // Lock this bounty to prevent duplicate claims
+          target.bounty.claimStatus = "pending";
+          target.bounty.claimId = claimId;
+          target.bounty.claimLockedAt = now;
+          requests[target.id] = target;
+          persist();
+
           persistClaims();
 
           const adminCh = await safeFetchChannel(guild, state.adminChannelId);
@@ -1131,6 +1356,8 @@ requests = readJson(REQUESTS_PATH, {});
                 `Target: **${escapeMd(target.tribeName)}**\n` +
                   `Reward: **${BOUNTY_REWARD}**\n` +
                   `Submitted by: <@${interaction.user.id}>\n` +
+                  `Claimant IGN: **${escapeMd(ign)}**\n` +
+                  `Target IGN (claimed): **${escapeMd(bountyIgn)}**\n` +
                   `Proof: ${proof}` +
                   (notes ? `\nNotes: ${escapeMd(notes)}` : "") +
                   `\nRecord ID: \`${target.id}\`\nClaim ID: \`${claimId}\``
@@ -1485,6 +1712,15 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
     claims[claimId] = claim;
     persistClaims();
 
+    // Unlock bounty for new claims if it still exists
+    if (record && record.bounty) {
+      record.bounty.claimStatus = null;
+      record.bounty.claimId = null;
+      record.bounty.claimLockedAt = null;
+      requests[record.id] = record;
+      persist();
+    }
+
     // Disable buttons on the claim message
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -1528,6 +1764,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
     record.bounty.claimedAt = Date.now();
     record.bounty.claimedBy = interaction.user.id;
     record.bounty.claimId = claimId;
+    record.bounty.claimStatus = "approved";
 
     requests[record.id] = record;
     persist();
@@ -1578,7 +1815,38 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       .setDisabled(true)
   );
 
-  return interaction.update({
+  
+// Reward log / closure notice
+try {
+  const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
+  const bountyCh = await safeFetchChannel(
+    interaction.guild,
+    state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
+  );
+
+  const claimant = claim.claimantIgn ? `Claimant IGN: **${escapeMd(claim.claimantIgn)}**\n` : "";
+  const targetIgn = claim.bountyTargetIgn ? `Target IGN (claimed): **${escapeMd(claim.bountyTargetIgn)}**\n` : "";
+  const proofLine = claim.proof ? `Proof: ${claim.proof}\n` : "";
+  const notesLine = claim.notes ? `Notes: ${escapeMd(claim.notes)}\n` : "";
+
+  const msg =
+    `✅ **BOUNTY CLAIM APPROVED**\n` +
+    `Tribe: **${escapeMd(claim.tribeName)}**\n` +
+    `${targetIgn}${claimant}` +
+    `Reward: **${BOUNTY_REWARD}**\n` +
+    `Approved by: <@${interaction.user.id}>\n` +
+    `Submitted by: <@${claim.submittedBy}>\n` +
+    proofLine +
+    notesLine +
+    `Claim ID: \`${claimId}\`  Record ID: \`${claim.bountyRecordId}\``;
+
+  if (adminCh && isTextChannel(adminCh)) await adminCh.send(msg);
+  if (bountyCh && isTextChannel(bountyCh)) await bountyCh.send(msg);
+} catch {
+  // ignore
+}
+
+return interaction.update({
     content: interaction.message.content,
     embeds: interaction.message.embeds,
     components: [row],
@@ -1967,6 +2235,19 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
             flags: 64});
         }
 
+if (target?.bounty?.claimStatus === "pending") {
+  return interaction.reply({
+    content: "A claim for this bounty is already pending admin review.",
+    flags: 64,
+  });
+}
+if (target?.bounty?.claimStatus === "approved") {
+  return interaction.reply({
+    content: "This bounty has already been claimed.",
+    flags: 64,
+  });
+}
+
         const ign = (interaction.fields.getTextInputValue("ign") || "").trim();
         const bountyIgn = (interaction.fields.getTextInputValue("bounty_ign") || "").trim();
         const proofRaw = (interaction.fields.getTextInputValue("proof") || "").trim();
@@ -1991,6 +2272,13 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         };
 
         claims[claimId] = claim;
+        // Lock this bounty to prevent duplicate claims
+        target.bounty.claimStatus = "pending";
+        target.bounty.claimId = claimId;
+        target.bounty.claimLockedAt = now;
+        requests[recordId] = target;
+        persist();
+
         persistClaims();
 
         const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
