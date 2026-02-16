@@ -909,7 +909,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1222,10 +1222,10 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
-            guild,
+              interaction.guild,
             state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
           );
           if (bountyCh && isTextChannel(bountyCh)) {
@@ -1731,7 +1731,7 @@ requests = readJson(REQUESTS_PATH, {});
             );
 
             const bountyCh = await safeFetchChannel(
-              guild,
+              interaction.guild,
               state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
             ).catch(() => null);
 
