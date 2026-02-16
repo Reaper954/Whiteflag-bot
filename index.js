@@ -49,7 +49,6 @@ const {
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID || null;
-const BUILD_VERSION = "v13_no_short_bounty_approved";
 
 if (!TOKEN) {
   console.error("Missing DISCORD_TOKEN in environment.");
@@ -487,487 +486,63 @@ function scheduleBountyExpiry(requestId) {
       if (!guild) return;
 
       const announceCh = await safeFetchChannel(guild, state.announceChannelId);
-      if (announceCh && isTextChannel(announceCh)) {
-        await announceCh.send(
-          `⏰ BOUNTY EXPIRED — Bounty ended for **${escapeMd(r.tribeName)}**.`
-        );
-      }
-    } finally {
-      activeBountyTimeouts.delete(requestId);
-    }
-  }, delay);
-
-  activeBountyTimeouts.set(requestId, t);
 }
-
-// -------------------- Bounty warning (24h before expiry) --------------------
-function scheduleBountyExpiryWarning(requestId) {
-  const req = requests[requestId];
-  if (!req || !hasActiveBounty(req)) return;
-
-  const existing = activeBountyAlertTimeouts.get(requestId);
-  if (existing) clearTimeout(existing);
-
-  const now = Date.now();
-  const warnAt = req.bounty.endsAt - ONE_DAY_MS;
-  const delay = Math.max(0, warnAt - now);
-
-  const t = setTimeout(async () => {
-    try {
-      requests = readJson(REQUESTS_PATH, {});
-      const r = requests[requestId];
-      if (!r || !hasActiveBounty(r)) return;
-
-      const guild = await safeFetchGuild(bot);
-      if (!guild) return;
-
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
-      if (adminCh && isTextChannel(adminCh)) {
-        const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
-        await adminCh.send(
-          `${ping}⚠️ BOUNTY EXPIRING SOON — Bounty for **${escapeMd(r.tribeName)}** expires ${fmtDiscordRelativeTime(r.bounty.endsAt)}.`
-        );
-      }
-    } finally {
-      activeBountyAlertTimeouts.delete(requestId);
-    }
-  }, delay);
-
-  activeBountyAlertTimeouts.set(requestId, t);
-}
-
-// -------------------- White Flag warning (24h before expiry) --------------------
-function scheduleWhiteFlagExpiryWarning(requestId) {
-  const req = requests[requestId];
-  if (!req || req.status !== "approved" || !req.approvedAt) return;
-
-  const existing = activeWfAlertTimeouts.get(requestId);
-  if (existing) clearTimeout(existing);
-
-  const now = Date.now();
-  const warnAt = req.approvedAt + SEVEN_DAYS_MS - ONE_DAY_MS;
-  const delay = Math.max(0, warnAt - now);
-
-  const t = setTimeout(async () => {
-    try {
-      requests = readJson(REQUESTS_PATH, {});
-      const r = requests[requestId];
-      if (!r || r.status !== "approved") return;
-
-      const guild = await safeFetchGuild(bot);
-      if (!guild) return;
-
-      const adminCh = await safeFetchChannel(guild, state.adminChannelId);
-      if (adminCh && isTextChannel(adminCh)) {
-        const ping = state.adminRoleId ? `<@&${state.adminRoleId}> ` : "";
-        await adminCh.send(
-          `${ping}⚠️ WHITE FLAG EXPIRING SOON — Protection for **${escapeMd(r.tribeName)}** expires ${fmtDiscordRelativeTime(r.approvedAt + SEVEN_DAYS_MS)}.`
-        );
-      }
-    } finally {
-      activeWfAlertTimeouts.delete(requestId);
-    }
-  }, delay);
-
-  activeWfAlertTimeouts.set(requestId, t);
-}
-
-// -------------------- Build embeds --------------------
-function buildAdminReviewEmbed(req) {
-  return new EmbedBuilder()
-    .setTitle("📋 White Flag Application")
-    .setDescription(
-      `IGN: **${escapeMd(req.ign)}**\n` +
-        `Tribe: **${escapeMd(req.tribeName)}**\n` +
-        `Map: **${escapeMd(req.map)}**\n` +
-        `Server Type: **${escapeMd(req.serverType || req.cluster || "N/A")}**\n` +
-        `Requested by: <@${req.requestedBy}>\n` +
-        `Request ID: \`${req.id}\``
-    )
-    .setColor(0x0099ff);
-}
-
-// -------------------- Client & Event Handlers --------------------
-const bot = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.DirectMessages,
-    GatewayIntentBits.MessageContent,
-  ],
-  partials: [Partials.Channel],
-});
-
-bot.once("ready", async () => {
-  console.log(`✅ Bot ready as ${bot.user.tag} (v${BUILD_VERSION})`);
-  // On startup, reschedule any active timers
-  requests = readJson(REQUESTS_PATH, {});
-  for (const [id, req] of Object.entries(requests)) {
-    if (isApprovedAndActive(req)) {
-      scheduleExpiry(id);
-      scheduleWhiteFlagExpiryWarning(id);
-      maybeSendTestAlert({ kind: "whiteflag", requestId: id, req });
-    }
-    if (hasActiveBounty(req)) {
-      scheduleBountyExpiry(id);
-      scheduleBountyExpiryWarning(id);
-      maybeSendTestAlert({ kind: "bounty", requestId: id, req });
-    }
-  }
-});
-
-bot.on("interactionCreate", async (interaction) => {
-  try {
-    // -------------------- Slash Commands --------------------
-    if (interaction.type === InteractionType.ApplicationCommand) {
-      const { commandName } = interaction;
-
-      if (commandName === "setup") {
-        if (!interaction.guild) {
-          return interaction.reply({ content: "Guild only.", flags: 64 });
-        }
-
-        const isAdmin =
-          interaction.member?.permissions?.has(
-            PermissionsBitField.Flags.Administrator
-          ) ?? false;
-        if (!isAdmin) {
-          return interaction.reply({
-            content: "Admins only.",
-            flags: 64,
-          });
-        }
-
-        state.guildId = interaction.guild.id;
-        state.rulesChannelId = interaction.options.getChannel("rules_channel").id;
-        state.applyChannelId = interaction.options.getChannel("apply_channel").id;
-        state.adminChannelId = interaction.options.getChannel("admin_channel").id;
-        state.announceChannelId = interaction.options.getChannel("announce_channel").id;
-        state.adminRoleId = interaction.options.getRole("admin_role").id;
-        state.openSeasonRoleId = interaction.options.getRole("open_season_role").id;
-
-        persist();
-
-        // Ensure the "Rules Accepted" role exists
-        const rulesRole = await ensureRulesAcceptedRole(interaction.guild);
-
-        // Post rules embed + accept button
-        const rulesChannel = await interaction.guild.channels
-          .fetch(state.rulesChannelId)
-          .catch(() => null);
-        if (rulesChannel && isTextChannel(rulesChannel)) {
-          const rulesEmbed = new EmbedBuilder()
-            .setTitle("⚔️ White Flag Rules")
-            .setDescription(
-              "Read and accept the rules below to unlock White Flag applications.\n\n" +
-                "1. You must be actively playing on the server.\n" +
-                "2. White Flag protection lasts 7 days.\n" +
-                "3. Only 1 active White Flag per tribe.\n" +
-                "4. Breaking rules = denial of future applications.\n" +
-                "5. Admins have final say.\n"
-            )
-            .setColor(0xff0000);
-
-          const acceptRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(CID.RULES_ACCEPT)
-              .setLabel("✅ I accept the rules")
-              .setStyle(ButtonStyle.Success)
-          );
-
-          const rulesMsg = await rulesChannel.send({
-            embeds: [rulesEmbed],
-            components: [acceptRow],
-          });
-          state.rulesMessageId = rulesMsg.id;
-        }
-
-        // Post apply buttons
-        const applyChannel = await interaction.guild.channels
-          .fetch(state.applyChannelId)
-          .catch(() => null);
-        if (applyChannel && isTextChannel(applyChannel)) {
-          const applyEmbed = new EmbedBuilder()
-            .setTitle("🛡️ White Flag Applications")
-            .setDescription("Choose your server type and submit an application.")
-            .setColor(0x00ff00);
-
-          const applyRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(CID.APPLY_OPEN_25)
-              .setLabel("Apply for 25x PVP")
-              .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-              .setCustomId(CID.APPLY_OPEN_100)
-              .setLabel("Apply for 100x PVP Chaos")
-              .setStyle(ButtonStyle.Primary)
-          );
-
-          const applyMsg = await applyChannel.send({
-            embeds: [applyEmbed],
-            components: [applyRow],
-          });
-          state.applyMessageId = applyMsg.id;
-        }
-
-        persist();
-
-        return interaction.reply({
-          content:
-            "✅ White Flag system setup complete! Rules posted and applications ready.",
-          flags: 64,
-        });
-      }
-
-      if (commandName === "rules") {
-        const rulesEmbed = new EmbedBuilder()
-          .setTitle("⚔️ White Flag Rules")
-          .setDescription(
-            "1. You must be actively playing on the server.\n" +
-              "2. White Flag protection lasts 7 days.\n" +
-              "3. Only 1 active White Flag per tribe.\n" +
-              "4. Breaking rules = denial of future applications.\n" +
-              "5. Admins have final say.\n"
-          )
-          .setColor(0xff0000);
-
-        return interaction.reply({
-          embeds: [rulesEmbed],
-          flags: 64,
-        });
-      }
-
-      if (commandName === "whiteflags") {
-        const subcommand = interaction.options.getSubcommand();
-
-        if (subcommand === "active") {
-          requests = readJson(REQUESTS_PATH, {});
-          const now = Date.now();
-          const active = Object.values(requests).filter((r) =>
-            isApprovedAndActive(r, now)
-          );
-
-          if (!active.length) {
-            return interaction.reply({
-              content: "No active White Flags.",
-              flags: 64,
-            });
-          }
-
-          let desc = "";
-          for (const req of active) {
-            const endsAt = fmtDiscordRelativeTime(req.approvedAt + SEVEN_DAYS_MS);
-            desc += `**${escapeMd(req.tribeName)}** (IGN: ${escapeMd(req.ign)}, Server: ${escapeMd(
-              req.serverType || req.cluster || "N/A"
-            )}) — Expires ${endsAt}\n`;
-          }
-
-          const embed = new EmbedBuilder()
-            .setTitle("🛡️ Active White Flags")
-            .setDescription(desc)
-            .setColor(0x00ff00);
-
-          return interaction.reply({
-            embeds: [embed],
-            flags: 64,
-          });
-        }
-      }
-    }
-
-// -------------------- Button handler for bounty claims --------------------
-async function handleBountyClaimButton(interaction) {
-  if (!interaction.guild) {
-    return interaction.reply({ content: "Guild only.", flags: 64 });
   }
 
-  const [action, recordId] = interaction.customId.split(":");
-
-  requests = readJson(REQUESTS_PATH, {});
-  const target = requests[recordId];
-  const now = Date.now();
-
-  if (!target || !hasActiveBounty(target, now)) {
-    return interaction.reply({
-      content: "This bounty is no longer active.",
-      flags: 64,
-    });
-  }
-
-  if (action === "bounty_claim_open") {
-    const modal = new ModalBuilder()
-      .setCustomId(`bounty_claim_submit:${recordId}`)
-      .setTitle("Claim Bounty");
-
-    const ign = new TextInputBuilder()
-      .setCustomId("ign")
-      .setLabel("Your IGN")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(64);
-
-    const bountyIgn = new TextInputBuilder()
-      .setCustomId("bounty_ign")
-      .setLabel("Bounty Target IGN")
-      .setStyle(TextInputStyle.Short)
-      .setRequired(true)
-      .setMaxLength(64);
-
-    const proof = new TextInputBuilder()
-      .setCustomId("proof")
-      .setLabel("Proof (optional)")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(false);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(ign),
-      new ActionRowBuilder().addComponents(bountyIgn),
-      new ActionRowBuilder().addComponents(proof)
-    );
-
-    return interaction.showModal(modal);
-  }
-
-  if (action === "bounty_claim_approve") {
-    const claimId = recordId;
-    claims = readJson(CLAIMS_PATH, {});
-    const claim = claims[claimId];
-
-    if (!claim || claim.status !== "pending") {
-      return interaction.reply({
-        content: "Claim not found or already processed.",
-        flags: 64,
-      });
-    }
-
-    // Permission check
-    const member = await interaction.guild.members
-      .fetch(interaction.user.id)
-      .catch(() => null);
-    const isAdminPerm =
-      member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
-    const hasAdminRole = state.adminRoleId
-      ? member?.roles?.cache?.has(state.adminRoleId)
-      : false;
-
-    if (!isAdminPerm && !hasAdminRole) {
-      return interaction.reply({ content: "Admins only.", flags: 64 });
-    }
-
-    claim.status = "approved";
-    claim.approvedAt = now;
-    claim.approvedBy = interaction.user.id;
-    claims[claimId] = claim;
-    persistClaims();
-
-    // Mark bounty as claimed
-    const bountyRec = requests[claim.bountyRecordId];
-    if (bountyRec && bountyRec.bounty) {
-      bountyRec.bounty.claimStatus = "approved";
-      bountyRec.bounty.approvedClaimId = claimId;
-      requests[claim.bountyRecordId] = bountyRec;
-      persist();
-    }
-
-    // Disable buttons on the claim message
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`bounty_claim_deny:${claimId}`)
-        .setLabel("Deny")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId(`bounty_claim_approve:${claimId}`)
-        .setLabel("Approved")
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(true)
-    );
+  // Disable buttons on the claim message
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`bounty_claim_deny:${claimId}`)
+      .setLabel("Deny")
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true),
+    new ButtonBuilder()
+      .setCustomId(`bounty_claim_approve:${claimId}`)
+      .setLabel("Approved")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(true)
+  );
 
   
-    return interaction.update({
-      content: interaction.message.content,
-      embeds: interaction.message.embeds,
-      components: [row],
-    });
-  }
+// Reward log / closure notice
+try {
+  const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
+  const bountyCh = await safeFetchChannel(
+    interaction.guild,
+    state.bountyAnnounceChannelId || state.announceChannelId || state.adminChannelId
+  );
 
-  if (action === "bounty_claim_deny") {
-    const claimId = recordId;
-    claims = readJson(CLAIMS_PATH, {});
-    const claim = claims[claimId];
+  const claimant = claim.claimantIgn ? `Claimant IGN: **${escapeMd(claim.claimantIgn)}**\n` : "";
+  const targetIgn = claim.bountyTargetIgn ? `Target IGN (claimed): **${escapeMd(claim.bountyTargetIgn)}**\n` : "";
+  const proofLine = claim.proof ? `Proof: ${claim.proof}\n` : "";
+  const notesLine = claim.notes ? `Notes: ${escapeMd(claim.notes)}\n` : "";
 
-    if (!claim || claim.status !== "pending") {
-      return interaction.reply({
-        content: "Claim not found or already processed.",
-        flags: 64,
-      });
-    }
+  const msg =
+    `✅ **BOUNTY CLAIM APPROVED**\n` +
+    `Tribe: **${escapeMd(claim.tribeName)}**\n` +
+    `${targetIgn}${claimant}` +
+    `Reward: **${BOUNTY_REWARD}**\n` +
+    `Approved by: <@${interaction.user.id}>\n` +
+    `Submitted by: <@${claim.submittedBy}>\n` +
+    proofLine +
+    notesLine +
+    `Claim ID: \`${claimId}\`  Record ID: \`${claim.bountyRecordId}\``;
 
-    // Permission check
-    const member = await interaction.guild.members
-      .fetch(interaction.user.id)
-      .catch(() => null);
-    const isAdminPerm =
-      member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
-    const hasAdminRole = state.adminRoleId
-      ? member?.roles?.cache?.has(state.adminRoleId)
-      : false;
-
-    if (!isAdminPerm && !hasAdminRole) {
-      return interaction.reply({ content: "Admins only.", flags: 64 });
-    }
-
-    claim.status = "denied";
-    claim.deniedAt = now;
-    claim.deniedBy = interaction.user.id;
-    claims[claimId] = claim;
-    persistClaims();
-
-    // Unlock bounty for new claims
-    const bountyRec = requests[claim.bountyRecordId];
-    if (bountyRec && bountyRec.bounty) {
-      bountyRec.bounty.claimStatus = null;
-      bountyRec.bounty.claimId = null;
-      bountyRec.bounty.claimLockedAt = null;
-      requests[claim.bountyRecordId] = bountyRec;
-      persist();
-    }
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`bounty_claim_deny:${claimId}`)
-        .setLabel("Denied")
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(true),
-      new ButtonBuilder()
-        .setCustomId(`bounty_claim_approve:${claimId}`)
-        .setLabel("Approve")
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(true)
-    );
-
-    return interaction.update({
-      content: interaction.message.content,
-      embeds: interaction.message.embeds,
-      components: [row],
-    });
-  }
+  if (adminCh && isTextChannel(adminCh)) await adminCh.send(msg);
+  if (bountyCh && isTextChannel(bountyCh)) await bountyCh.send(msg);
+} catch {
+  // ignore
 }
 
-      // -------------------- Button interactions --------------------
-      if (interaction.type === InteractionType.MessageComponent) {
-        // Handle bounty claim buttons
-        if (
-          interaction.customId.startsWith("bounty_claim_open:") ||
-          interaction.customId.startsWith("bounty_claim_approve:") ||
-          interaction.customId.startsWith("bounty_claim_deny:")
-        ) {
-          return handleBountyClaimButton(interaction);
-        }
-  
-        // Rules accept
-        if (interaction.customId === CID.RULES_ACCEPT) {
+return interaction.update({
+    content: interaction.message.content,
+    embeds: interaction.message.embeds,
+    components: [row],
+  });
+}
+
+      // Rules accept
+      if (interaction.customId === CID.RULES_ACCEPT) {
         if (!interaction.guild || !interaction.member) {
           return interaction.reply({ content: "Guild only.", flags: 64});
         }
@@ -1536,63 +1111,6 @@ if (target?.bounty?.claimStatus === "approved") {
     }
   }
 });
-
-// Register slash commands
-async function registerCommands() {
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("setup")
-      .setDescription("Setup White Flag system (admins only)")
-      .addChannelOption((opt) =>
-        opt.setName("rules_channel").setDescription("Rules channel").setRequired(true)
-      )
-      .addChannelOption((opt) =>
-        opt.setName("apply_channel").setDescription("Apply channel").setRequired(true)
-      )
-      .addChannelOption((opt) =>
-        opt.setName("admin_channel").setDescription("Admin review channel").setRequired(true)
-      )
-      .addChannelOption((opt) =>
-        opt.setName("announce_channel").setDescription("Announcement channel").setRequired(true)
-      )
-      .addRoleOption((opt) =>
-        opt.setName("admin_role").setDescription("Admin role").setRequired(true)
-      )
-      .addRoleOption((opt) =>
-        opt
-          .setName("open_season_role")
-          .setDescription("Open Season ping role")
-          .setRequired(true)
-      ),
-    new SlashCommandBuilder()
-      .setName("rules")
-      .setDescription("Show White Flag rules"),
-    new SlashCommandBuilder()
-      .setName("whiteflags")
-      .setDescription("White Flag commands")
-      .addSubcommand((sub) =>
-        sub.setName("active").setDescription("List all active White Flags")
-      ),
-  ];
-
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-  try {
-    if (GUILD_ID) {
-      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), {
-        body: commands,
-      });
-      console.log("✅ Slash commands registered (guild)");
-    } else {
-      await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
-      console.log("✅ Slash commands registered (global)");
-    }
-  } catch (err) {
-    console.error("Failed to register slash commands:", err);
-  }
-}
-
-registerCommands();
 
 
 // -------------------- Railway/hosting keep-alive (optional) --------------------
