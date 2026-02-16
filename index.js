@@ -910,7 +910,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1223,7 +1223,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
               interaction.guild,
@@ -1245,11 +1245,10 @@ requests = readJson(REQUESTS_PATH, {});
               components: [claimRow],
             });
             // Store the announcement message so we can disable it when claimed/removed
-            if (requests[record.id] && requests[record.id].bounty) {
-              requests[record.id].bounty.announceChannelId = bountyCh.id;
-              requests[record.id].bounty.announceMessageId = bountyMsg.id;
+              req.bounty.announceChannelId = bountyCh.id;
+              req.bounty.announceMessageId = bountyMsg.id;
+              requests[requestId] = req;
               persist();
-            }
 
           }
 
@@ -1919,11 +1918,10 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
                 components: [claimRow],
               });
             // Store the announcement message so we can disable it when claimed/removed
-            if (requests[record.id] && requests[record.id].bounty) {
-              requests[record.id].bounty.announceChannelId = bountyCh.id;
-              requests[record.id].bounty.announceMessageId = bountyMsg.id;
+              req.bounty.announceChannelId = bountyCh.id;
+              req.bounty.announceMessageId = bountyMsg.id;
+              requests[requestId] = req;
               persist();
-            }
 
             }
           }
