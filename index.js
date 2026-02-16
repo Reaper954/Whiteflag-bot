@@ -1788,6 +1788,95 @@ requests = readJson(REQUESTS_PATH, {});
 
     // -------------------- Modal submit --------------------
     if (interaction.type === InteractionType.ModalSubmit) {
+      // ---- Player: submit bounty claim modal ----
+      if (interaction.customId.startsWith("bounty_claim_submit:")) {
+        if (!interaction.guild) {
+          return interaction.reply({ content: "Guild only.", ephemeral: true });
+        }
+        if (!state.adminChannelId) {
+          return interaction.reply({
+            content: "Bot not setup yet. Ask an admin to run /setup.",
+            ephemeral: true,
+          });
+        }
+
+        const [, recordId] = interaction.customId.split(":");
+
+        // Re-load latest data
+        requests = readJson(REQUESTS_PATH, {});
+        claims = readJson(CLAIMS_PATH, {});
+
+        const target = requests[recordId];
+        const now = Date.now();
+
+        if (!target || !hasActiveBounty(target, now)) {
+          return interaction.reply({
+            content: "This bounty is no longer active.",
+            ephemeral: true,
+          });
+        }
+
+        const ign = (interaction.fields.getTextInputValue("ign") || "").trim();
+        const bountyIgn = (interaction.fields.getTextInputValue("bounty_ign") || "").trim();
+        const proofRaw = (interaction.fields.getTextInputValue("proof") || "").trim();
+        const proof = proofRaw.length ? proofRaw : "N/A";
+
+        if (!ign || !bountyIgn) {
+          return interaction.reply({ content: "IGN fields are required.", ephemeral: true });
+        }
+
+        const claimId = newClaimId();
+        const claim = {
+          id: claimId,
+          bountyRecordId: target.id,
+          tribeName: target.tribeName,
+          reward: BOUNTY_REWARD,
+          submittedBy: interaction.user.id,
+          submittedAt: now,
+          claimantIgn: ign,
+          bountyTargetIgn: bountyIgn,
+          proof,
+          status: "pending",
+        };
+
+        claims[claimId] = claim;
+        persistClaims();
+
+        const adminCh = await safeFetchChannel(interaction.guild, state.adminChannelId);
+        if (adminCh && isTextChannel(adminCh)) {
+          const embed = new EmbedBuilder()
+            .setTitle("🎯 Bounty Claim Submitted")
+            .setDescription(
+              `Target Tribe: **${escapeMd(target.tribeName)}**\n` +
+                `Target IGN: **${escapeMd(target.ign || "N/A")}**\n` +
+                `Reward: **${BOUNTY_REWARD}**\n` +
+                `Submitted by: <@${interaction.user.id}>\n` +
+                `Claimant IGN: **${escapeMd(ign)}**\n` +
+                `Bounty Target IGN: **${escapeMd(bountyIgn)}**\n` +
+                `Proof: ${proof}\n` +
+                `Record ID: \`${target.id}\`\nClaim ID: \`${claimId}\``
+            );
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`bounty_claim_approve:${claimId}`)
+              .setLabel("Approve")
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId(`bounty_claim_deny:${claimId}`)
+              .setLabel("Deny")
+              .setStyle(ButtonStyle.Danger)
+          );
+
+          await adminCh.send({ embeds: [embed], components: [row] });
+        }
+
+        return interaction.reply({
+          content: "✅ Claim submitted for admin review.",
+          ephemeral: true,
+        });
+      }
+
       const is25 = interaction.customId === CID.APPLY_MODAL_25;
       const is100 = interaction.customId === CID.APPLY_MODAL_100;
       if (!is25 && !is100) return;

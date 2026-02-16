@@ -1,8 +1,6 @@
 // commands.js
 // Slash command deploy script for the White Flag bot (Discord.js v14).
 //
-// Use this if you prefer registering commands separately from index.js.
-//
 // Env:
 //   DISCORD_TOKEN (required)
 //   CLIENT_ID    (required) - your application's client id
@@ -58,7 +56,7 @@ const commands = [
     .addChannelOption((opt) =>
       opt
         .setName("bounty_channel")
-        .setDescription("Channel to announce bounties")
+        .setDescription("Channel to announce bounties (optional)")
         .setRequired(false)
     )
     .addRoleOption((opt) =>
@@ -74,9 +72,7 @@ const commands = [
         .setRequired(true)
     ),
 
-  new SlashCommandBuilder()
-    .setName("rules")
-    .setDescription("Show the White Flag rules (ephemeral)."),
+  new SlashCommandBuilder().setName("rules").setDescription("Show the White Flag rules (ephemeral)."),
 
   new SlashCommandBuilder()
     .setName("whiteflags")
@@ -119,7 +115,7 @@ const commands = [
     .addSubcommand((sc) =>
       sc
         .setName("claim")
-        .setDescription("Submit a bounty claim (creates an admin ticket).")
+        .setDescription("Submit a bounty claim (admin review).")
         .addStringOption((opt) =>
           opt.setName("tribe").setDescription("Bounty target tribe").setRequired(true)
         )
@@ -131,6 +127,9 @@ const commands = [
         )
         .addStringOption((opt) =>
           opt.setName("proof").setDescription("Proof link (clip/screenshot)").setRequired(true)
+        )
+        .addStringOption((opt) =>
+          opt.setName("notes").setDescription("Optional notes for admins").setRequired(false)
         )
     ),
 
@@ -151,6 +150,7 @@ const commands = [
         )
     ),
 ].map((c) => c.toJSON());
+
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
