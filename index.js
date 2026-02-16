@@ -1240,12 +1240,11 @@ requests = readJson(REQUESTS_PATH, {});
               components: [claimRow],
             });
             // Store the announcement message so we can disable it when claimed/removed
-            record.bounty.announceChannelId = bountyCh.id;
-            record.bounty.announceMessageId = bountyMsg.id;
-            requests[id] = record;
-            persist();
-
-          }
+              req.bounty.announceChannelId = bountyCh.id;
+              req.bounty.announceMessageId = bountyMsg.id;
+              requests[requestId] = req;
+              persist();
+}
 
           return interaction.reply({
             content:
@@ -1904,13 +1903,11 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
                 components: [claimRow],
               });
             // Store the announcement message so we can disable it when claimed/removed
-            target.bounty.announceChannelId = bountyCh.id;
-target.bounty.announceMessageId = bountyMsg.id;
-requests[target.id] = target;
-persist();
-
-
-            }
+              req.bounty.announceChannelId = bountyCh.id;
+              req.bounty.announceMessageId = bountyMsg.id;
+              requests[requestId] = req;
+              persist();
+}
           }
 
           // Update admin message: disable end early
