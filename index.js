@@ -928,11 +928,11 @@ bot.on("interactionCreate", async (interaction) => {
           !interaction.memberPermissions ||
           !interaction.memberPermissions.has(PermissionsBitField.Flags.Administrator)
         ) {
-          return interaction.reply({ content: "Admins only.", ephemeral: true });
+          return interaction.reply({ content: "Admins only.", flags: 64});
         }
 
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         // Resolve options (all required by command definition)
         const rulesChannel = interaction.options.getChannel("rules_channel");
@@ -945,14 +945,12 @@ bot.on("interactionCreate", async (interaction) => {
         if (![rulesChannel, applyChannel, adminChannel, announceChannel].every(isTextChannel)) {
           return interaction.reply({
             content: "All channels must be text channels.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
         if (!adminRole || !openSeasonRole) {
           return interaction.reply({
             content: "Admin role and Open Season role are required.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         // Ensure role for rules gate exists
@@ -991,7 +989,7 @@ bot.on("interactionCreate", async (interaction) => {
             `• Admin review: <#${adminChannel.id}> (ping <@&${adminRole.id}>)\n` +
             `• Open Season announcements: <#${announceChannel.id}> (ping <@&${openSeasonRole.id}>)\n` +
             `• Rules gate role: <@&${rulesAcceptedRole.id}>`,
-          ephemeral: true,
+          flags: 64,
         });
       }
 
@@ -999,14 +997,13 @@ bot.on("interactionCreate", async (interaction) => {
         return interaction.reply({
           embeds: [buildRulesEmbed()],
           components: [buildRulesRow()],
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       if (interaction.commandName === "whiteflags" && interaction.options.getSubcommand() === "active") {
         // Admin-only (admin role or Administrator)
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
@@ -1016,7 +1013,7 @@ bot.on("interactionCreate", async (interaction) => {
         if (!isAdminPerm && !hasAdminRole) {
           const sub = interaction.options.getSubcommand();
           if (sub !== "claim") {
-            return interaction.reply({ content: "Admins only.", ephemeral: true });
+            return interaction.reply({ content: "Admins only.", flags: 64});
           }
         }
 requests = readJson(REQUESTS_PATH, {});
@@ -1024,7 +1021,7 @@ requests = readJson(REQUESTS_PATH, {});
         const active = Object.values(requests).filter((r) => isApprovedAndActive(r, now));
 
         if (active.length === 0) {
-          return interaction.reply({ content: "No active White Flags right now.", ephemeral: true });
+          return interaction.reply({ content: "No active White Flags right now.", flags: 64});
         }
 
         // Sort by end time soonest
@@ -1040,12 +1037,12 @@ requests = readJson(REQUESTS_PATH, {});
           .setTitle(`Active White Flags (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900)); // keep under embed limits
 
-        return interaction.reply({ embeds: [embed], ephemeral: true });
+        return interaction.reply({ embeds: [embed], flags: 64});
       }
     }
       if (interaction.commandName === "bounties" && interaction.options.getSubcommand() === "active") {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
@@ -1053,7 +1050,7 @@ requests = readJson(REQUESTS_PATH, {});
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
         if (!isAdminPerm && !hasAdminRole) {
-          return interaction.reply({ content: "Admins only.", ephemeral: true });
+          return interaction.reply({ content: "Admins only.", flags: 64});
         }
 
         requests = readJson(REQUESTS_PATH, {});
@@ -1061,7 +1058,7 @@ requests = readJson(REQUESTS_PATH, {});
         const active = Object.values(requests).filter((r) => hasActiveBounty(r, now));
 
         if (active.length === 0) {
-          return interaction.reply({ content: "No active bounties right now.", ephemeral: true });
+          return interaction.reply({ content: "No active bounties right now.", flags: 64});
         }
 
         active.sort((a, b) => a.bounty.endsAt - b.bounty.endsAt);
@@ -1075,13 +1072,13 @@ requests = readJson(REQUESTS_PATH, {});
           .setTitle(`Active Bounties (${active.length})`)
           .setDescription(lines.join("\n").slice(0, 3900));
 
-        return interaction.reply({ embeds: [embed], ephemeral: true });
+        return interaction.reply({ embeds: [embed], flags: 64});
       }
 
       // -------------------- Bounty control --------------------
       if (interaction.commandName === "bounty") {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
@@ -1089,7 +1086,7 @@ requests = readJson(REQUESTS_PATH, {});
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
         if (!isAdminPerm && !hasAdminRole) {
-          return interaction.reply({ content: "Admins only.", ephemeral: true });
+          return interaction.reply({ content: "Admins only.", flags: 64});
         }
 
         const sub = interaction.options.getSubcommand();
@@ -1106,8 +1103,7 @@ requests = readJson(REQUESTS_PATH, {});
           if (!target) {
             return interaction.reply({
               content: "No active bounty found for that tribe.",
-              ephemeral: true,
-            });
+              flags: 64});
           }
 
           const claimId = newClaimId();
@@ -1157,8 +1153,7 @@ requests = readJson(REQUESTS_PATH, {});
           return interaction.reply({
             content:
               "✅ Claim submitted for admin review. If approved, the bounty will be closed and the reward announced.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         requests = readJson(REQUESTS_PATH, {});
@@ -1196,7 +1191,7 @@ requests = readJson(REQUESTS_PATH, {});
             return interaction.reply({
               content:
                 `🛡️Bounty refreshed for **${escapeMd(tribe)}**. Ends ${fmtDiscordRelativeTime(existing.bounty.endsAt)} (ID: \`${existing.id}\`).`,
-              ephemeral: true,
+              flags: 64,
             });
           }
 
@@ -1245,17 +1240,17 @@ requests = readJson(REQUESTS_PATH, {});
               components: [claimRow],
             });
             // Store the announcement message so we can disable it when claimed/removed
-              req.bounty.announceChannelId = bountyCh.id;
-              req.bounty.announceMessageId = bountyMsg.id;
-              requests[requestId] = req;
-              persist();
+            record.bounty.announceChannelId = bountyCh.id;
+            record.bounty.announceMessageId = bountyMsg.id;
+            requests[id] = record;
+            persist();
 
           }
 
           return interaction.reply({
             content:
               `🛡️Bounty issued for **${escapeMd(record.tribeName)}**. Ends ${fmtDiscordRelativeTime(record.bounty.endsAt)} (ID: \`${id}\`).`,
-            ephemeral: true,
+            flags: 64,
           });
         }
 
@@ -1266,8 +1261,7 @@ requests = readJson(REQUESTS_PATH, {});
           if (!tribe && !id) {
             return interaction.reply({
               content: "Provide either **tribe** or **id**.",
-              ephemeral: true,
-            });
+              flags: 64});
           }
 
           let target = null;
@@ -1275,7 +1269,7 @@ requests = readJson(REQUESTS_PATH, {});
           if (!target && tribe) target = getActiveBountyForTribe(tribe);
 
           if (!target || !target.bounty || !target.bounty.active) {
-            return interaction.reply({ content: "No active bounty found for that input.", ephemeral: true });
+            return interaction.reply({ content: "No active bounty found for that input.", flags: 64});
           }
 
           const t = activeBountyTimeouts.get(target.id);
@@ -1314,7 +1308,7 @@ try {
 
           return interaction.reply({
             content: `🛡️Bounty canceled for **${escapeMd(target.tribeName)}** (ID: \`${target.id}\`).`,
-            ephemeral: true,
+            flags: 64,
           });
         }
       }
@@ -1322,7 +1316,7 @@ try {
       // -------------------- Tribe intelligence --------------------
       if (interaction.commandName === "tribe") {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         const member = await guild.members.fetch(interaction.user.id).catch(() => null);
         const isAdminPerm =
@@ -1330,7 +1324,7 @@ try {
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
         if (!isAdminPerm && !hasAdminRole) {
-          return interaction.reply({ content: "Admins only.", ephemeral: true });
+          return interaction.reply({ content: "Admins only.", flags: 64});
         }
 
         const sub = interaction.options.getSubcommand();
@@ -1370,12 +1364,12 @@ try {
             .setTitle(`🛡️  — Tribe Status — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n"));
 
-          return interaction.reply({ embeds: [embed], ephemeral: true });
+          return interaction.reply({ embeds: [embed], flags: 64});
         }
 
         if (sub === "history") {
           if (entries.length === 0) {
-            return interaction.reply({ content: "No records found for that tribe.", ephemeral: true });
+            return interaction.reply({ content: "No records found for that tribe.", flags: 64});
           }
 
           const recent = entries.slice(0, 10);
@@ -1402,7 +1396,7 @@ try {
             .setTitle(`🛡️  — Tribe History — ${escapeMd(tribe)}`)
             .setDescription(lines.join("\n").slice(0, 3900));
 
-          return interaction.reply({ embeds: [embed], ephemeral: true });
+          return interaction.reply({ embeds: [embed], flags: 64});
         }
       }
 
@@ -1416,7 +1410,7 @@ try {
         const record = requests[recordId];
         const now = Date.now();
         if (!record || !hasActiveBounty(record, now)) {
-          return interaction.reply({ content: "This bounty is no longer active.", ephemeral: true });
+          return interaction.reply({ content: "This bounty is no longer active.", flags: 64});
         }
 
         const modal = new ModalBuilder()
@@ -1454,11 +1448,11 @@ try {
 
 // ---- Admin: approve/deny bounty claims ----
 if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.customId.startsWith("bounty_claim_deny:")) {
-  if (!interaction.guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+  if (!interaction.guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
   // Enforce admin channel if configured
   if (state.adminChannelId && interaction.channelId !== state.adminChannelId) {
-    return interaction.reply({ content: "Admin actions must be used in the admin review channel.", ephemeral: true });
+    return interaction.reply({ content: "Admin actions must be used in the admin review channel.", flags: 64});
   }
 
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
@@ -1466,7 +1460,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
   const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
   if (!isAdminPerm && !hasAdminRole) {
-    return interaction.reply({ content: "Admins only.", ephemeral: true });
+    return interaction.reply({ content: "Admins only.", flags: 64});
   }
 
   const action = interaction.customId.split(":")[0]; // bounty_claim_approve / bounty_claim_deny
@@ -1477,10 +1471,10 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
   const claim = claims[claimId];
 
   if (!claim) {
-    return interaction.reply({ content: "Claim not found (maybe already handled).", ephemeral: true });
+    return interaction.reply({ content: "Claim not found (maybe already handled).", flags: 64});
   }
   if (claim.status && claim.status !== "pending") {
-    return interaction.reply({ content: `Claim already **${claim.status}**.`, ephemeral: true });
+    return interaction.reply({ content: `Claim already **${claim.status}**.`, flags: 64 });
   }
 
   const record = requests[claim.bountyRecordId];
@@ -1595,13 +1589,12 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       // Rules accept
       if (interaction.customId === CID.RULES_ACCEPT) {
         if (!interaction.guild || !interaction.member) {
-          return interaction.reply({ content: "Guild only.", ephemeral: true });
+          return interaction.reply({ content: "Guild only.", flags: 64});
         }
         if (!state.rulesAcceptedRoleId) {
           return interaction.reply({
             content: "Bot not setup yet. Ask an admin to run /setup.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const role = await interaction.guild.roles
@@ -1610,39 +1603,35 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         if (!role) {
           return interaction.reply({
             content: "Rules role missing. Ask an admin to rerun /setup.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const member = await interaction.guild.members
           .fetch(interaction.user.id)
           .catch(() => null);
-        if (!member) return interaction.reply({ content: "Could not fetch member.", ephemeral: true });
+        if (!member) return interaction.reply({ content: "Could not fetch member.", flags: 64});
 
         if (member.roles.cache.has(role.id)) {
           return interaction.reply({
             content: "🛡️Rules already acknowledged. You may apply.🛡️",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         await member.roles.add(role, "Accepted White Flag rules").catch(() => null);
         return interaction.reply({
           content: "🛡️Rules acknowledged. You may submit an application.🛡️",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       // Apply open -> show modal (only if rules accepted + no pending request)
       if (interaction.customId === CID.APPLY_OPEN_25 || interaction.customId === CID.APPLY_OPEN_100) {
         if (!interaction.guild) {
-          return interaction.reply({ content: "Guild only.", ephemeral: true });
+          return interaction.reply({ content: "Guild only.", flags: 64});
         }
         if (!state.rulesAcceptedRoleId || !state.adminChannelId || !state.adminRoleId) {
           return interaction.reply({
             content: "Bot not setup yet. Ask an admin to run /setup.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const serverType =
@@ -1655,20 +1644,18 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         if (pending) {
           return interaction.reply({
             content: "You already have a pending White Flag application. Please wait for admin review.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const member = await interaction.guild.members
           .fetch(interaction.user.id)
           .catch(() => null);
-        if (!member) return interaction.reply({ content: "Could not fetch member.", ephemeral: true });
+        if (!member) return interaction.reply({ content: "Could not fetch member.", flags: 64});
 
         if (!member.roles.cache.has(state.rulesAcceptedRoleId)) {
           return interaction.reply({
             content: "You must read and accept the White Flag rules before submitting an application.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const modal = new ModalBuilder()
@@ -1711,14 +1698,13 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         interaction.customId.startsWith(CID.ADMIN_DENY_PREFIX) ||
         interaction.customId.startsWith(CID.ADMIN_END_EARLY_PREFIX)
       ) {
-        if (!interaction.guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+        if (!interaction.guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
         // Optional: enforce that admin actions happen inside admin channel
         if (state.adminChannelId && interaction.channelId !== state.adminChannelId) {
           return interaction.reply({
             content: "Admin actions must be used in the admin review channel.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         // Permission check: must have admin role OR Administrator permission
@@ -1730,20 +1716,20 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         const hasAdminRole = state.adminRoleId ? member?.roles?.cache?.has(state.adminRoleId) : false;
 
         if (!isAdminPerm && !hasAdminRole) {
-          return interaction.reply({ content: "Admins only.", ephemeral: true });
+          return interaction.reply({ content: "Admins only.", flags: 64});
         }
 
         const requestId = interaction.customId.split(":")[1];
         requests = readJson(REQUESTS_PATH, {});
         const req = requests[requestId];
         if (!req) {
-          return interaction.reply({ content: "Request not found (maybe already handled).", ephemeral: true });
+          return interaction.reply({ content: "Request not found (maybe already handled).", flags: 64});
         }
 
         // Approve
         if (interaction.customId.startsWith(CID.ADMIN_APPROVE_PREFIX)) {
           if (req.status !== "pending") {
-            return interaction.reply({ content: `Already ${req.status}.`, ephemeral: true });
+            return interaction.reply({ content: `Already ${req.status}.`, flags: 64 });
           }
 
           // Enforce one active White Flag per tribe
@@ -1753,7 +1739,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
               content:
                 `❌ Cannot approve. Tribe **${escapeMd(req.tribeName)}** already has an active White Flag ` +
                 `(ID: \`${existingActive.id}\`) ending ${fmtDiscordRelativeTime(existingActive.approvedAt + SEVEN_DAYS_MS)}.`,
-              ephemeral: true,
+              flags: 64,
             });
           }
 
@@ -1807,7 +1793,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         // Deny
         if (interaction.customId.startsWith(CID.ADMIN_DENY_PREFIX)) {
           if (req.status !== "pending") {
-            return interaction.reply({ content: `Already ${req.status}.`, ephemeral: true });
+            return interaction.reply({ content: `Already ${req.status}.`, flags: 64 });
           }
           req.status = "denied";
           req.deniedAt = Date.now();
@@ -1852,7 +1838,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
           if (req.status !== "approved") {
             return interaction.reply({
               content: `Cannot end early because status is **${req.status}**.`,
-              ephemeral: true,
+              flags: 64,
             });
           }
 
@@ -1918,10 +1904,10 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
                 components: [claimRow],
               });
             // Store the announcement message so we can disable it when claimed/removed
-              req.bounty.announceChannelId = bountyCh.id;
-              req.bounty.announceMessageId = bountyMsg.id;
-              requests[requestId] = req;
-              persist();
+            record.bounty.announceChannelId = bountyCh.id;
+            record.bounty.announceMessageId = bountyMsg.id;
+            requests[id] = record;
+            persist();
 
             }
           }
@@ -1960,13 +1946,12 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       // ---- Player: submit bounty claim modal ----
       if (interaction.customId.startsWith("bounty_claim_submit:")) {
         if (!interaction.guild) {
-          return interaction.reply({ content: "Guild only.", ephemeral: true });
+          return interaction.reply({ content: "Guild only.", flags: 64});
         }
         if (!state.adminChannelId) {
           return interaction.reply({
             content: "Bot not setup yet. Ask an admin to run /setup.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const [, recordId] = interaction.customId.split(":");
@@ -1981,8 +1966,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         if (!target || !hasActiveBounty(target, now)) {
           return interaction.reply({
             content: "This bounty is no longer active.",
-            ephemeral: true,
-          });
+            flags: 64});
         }
 
         const ign = (interaction.fields.getTextInputValue("ign") || "").trim();
@@ -1991,7 +1975,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
         const proof = proofRaw.length ? proofRaw : "N/A";
 
         if (!ign || !bountyIgn) {
-          return interaction.reply({ content: "IGN fields are required.", ephemeral: true });
+          return interaction.reply({ content: "IGN fields are required.", flags: 64});
         }
 
         const claimId = newClaimId();
@@ -2042,20 +2026,18 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
 
         return interaction.reply({
           content: "✅ Claim submitted for admin review.",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       const is25 = interaction.customId === CID.APPLY_MODAL_25;
       const is100 = interaction.customId === CID.APPLY_MODAL_100;
       if (!is25 && !is100) return;
-      if (!interaction.guild) return interaction.reply({ content: "Guild only.", ephemeral: true });
+      if (!interaction.guild) return interaction.reply({ content: "Guild only.", flags: 64});
 
       if (!state.adminChannelId || !state.adminRoleId) {
         return interaction.reply({
           content: "Bot not setup yet. Ask an admin to run /setup.",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       const serverType = is25 ? "25x PVP" : "100x PVP Chaos";
@@ -2067,8 +2049,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       if (!member || !member.roles.cache.has(state.rulesAcceptedRoleId)) {
         return interaction.reply({
           content: "You must accept the rules before submitting an application.",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       const ign = interaction.fields.getTextInputValue("ign")?.trim();
@@ -2076,7 +2057,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       const map = interaction.fields.getTextInputValue("map")?.trim();
 
       if (!ign || !tribe || !map) {
-        return interaction.reply({ content: "All fields are required.", ephemeral: true });
+        return interaction.reply({ content: "All fields are required.", flags: 64});
       }
 
       // Prevent duplicate pending requests (race-safe-ish)
@@ -2085,8 +2066,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       if (pending) {
         return interaction.reply({
           content: "You already have a pending White Flag application. Please wait for admin review.",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       // Enforce one active White Flag per tribe (block submission too)
@@ -2096,7 +2076,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
           content:
             `❌ That tribe already has an active White Flag (ID: \`${existingActive.id}\`) ` +
             `ending ${fmtDiscordRelativeTime(existingActive.approvedAt + SEVEN_DAYS_MS)}.`,
-          ephemeral: true,
+          flags: 64,
         });
       }
 
@@ -2120,8 +2100,7 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
       if (!adminCh || !isTextChannel(adminCh)) {
         return interaction.reply({
           content: "Admin channel not found. Ask an admin to rerun /setup.",
-          ephemeral: true,
-        });
+          flags: 64});
       }
 
       const row = new ActionRowBuilder().addComponents(
@@ -2144,14 +2123,14 @@ if (interaction.customId.startsWith("bounty_claim_approve:") || interaction.cust
 
       return interaction.reply({
         content: `🛡️Application submitted for **${serverType}**! Admins have been notified.🛡️`,
-        ephemeral: true,
+        flags: 64,
       });
     }
   } catch (err) {
     console.error("interaction error:", err);
     if (interaction && !interaction.replied && !interaction.deferred) {
       try {
-        await interaction.reply({ content: "Something went wrong.", ephemeral: true });
+        await interaction.reply({ content: "Something went wrong.", flags: 64});
       } catch {
         // ignore reply errors
       }
