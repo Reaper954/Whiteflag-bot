@@ -473,11 +473,11 @@ async function scheduleTestAlertsOnStartup() {
       if (isApprovedAndActive(r, now)) {
         const endsAt = r.approvedAt ? r.approvedAt + SEVEN_DAYS_MS : null;
         const warnAt = endsAt ? endsAt - 24 * 60 * 60 * 1000 : null;
-        maybeSendTestAlert({ kind: "whiteflag", requestId: id, req: record, realWarnAt: warnAt });
+        maybeSendTestAlert({ kind: "whiteflag", requestId: id, req: r, realWarnAt: warnAt });
       }
       if (hasActiveBounty(r, now)) {
         const warnAt = r.bounty?.endsAt ? r.bounty.endsAt - 24 * 60 * 60 * 1000 : null;
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: warnAt });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: warnAt });
       }
     }
   } catch {
@@ -910,7 +910,7 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
       }
     }
   } catch (_e) {
@@ -1223,7 +1223,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-        maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+        maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
               interaction.guild,
