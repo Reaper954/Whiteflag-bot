@@ -1166,7 +1166,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
 
           const bountyCh = await safeFetchChannel(
             guild,
