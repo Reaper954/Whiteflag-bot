@@ -457,7 +457,7 @@ async function expireOverdueBountiesOnStartup() {
       }
     }
     if (changed) persist();
-  } catch {
+  } catch (_e) {
     console.error("Failed to expire overdue bounties:", _e);
   }
 }
@@ -535,7 +535,7 @@ function scheduleWhiteFlagExpiryWarning(requestId) {
         `${ping}⚠️ **** — White Flag for **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch {
+    } catch (_e) {
       console.error("White Flag warning failed:", _e);
     } finally {
       activeWfAlertTimeouts.delete(requestId);
@@ -589,7 +589,7 @@ function scheduleBountyExpiryWarning(requestId) {
         `${ping}⚠️ **** — Bounty on **${escapeMd(r.tribeName)}** expires in **24 hours**. ` +
           `Ends ${fmtDiscordRelativeTime(endsAt2)} (ID: \`${r.id}\`).`
       );
-    } catch {
+    } catch (_e) {
       console.error("Bounty warning failed:", _e);
     } finally {
       activeBountyAlertTimeouts.delete(requestId);
@@ -636,7 +636,7 @@ async function expireOverdueApprovalsOnStartup() {
       }
     }
     if (changed) persist();
-  } catch {
+  } catch (_e) {
     console.error("Failed to expire overdue approvals:", _e);
   }
 }
@@ -849,7 +849,7 @@ async function registerSlashCommands() {
       await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
       console.log("✅ Registered global slash commands (can take up to ~1 hour to appear).");
     }
-  } catch {
+  } catch (_e) {
     console.error("Failed to register slash commands:", _e);
   }
 }
@@ -883,10 +883,10 @@ bot.once("clientReady", async () => {
       if (hasActiveBounty(r, now)) {
         scheduleBountyExpiry(id);
         scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
       }
     }
-  } catch {
+  } catch (_e) {
     console.error("Failed to reschedule timers:", _e);
   }
 });
@@ -1196,7 +1196,7 @@ requests = readJson(REQUESTS_PATH, {});
           persist();
           scheduleBountyExpiry(id);
           scheduleBountyExpiryWarning(id);
-          maybeSendTestAlert({ kind: "bounty", requestId: id, req: r, realWarnAt: null });
+          maybeSendTestAlert({ kind: "bounty", requestId: id, req: record, realWarnAt: null });
 
           const announceCh = await safeFetchChannel(guild, state.announceChannelId);
           if (announceCh && isTextChannel(announceCh)) {
