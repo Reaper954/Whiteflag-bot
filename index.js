@@ -606,16 +606,6 @@ async function registerSlashCommandsOnStartup() {
               .addChoices({ name: "pending", value: "pending" }, { name: "approved", value: "approved" }, { name: "denied", value: "denied" }, { name: "all", value: "all" })
           )
       ),
-    new SlashCommandBuilder()
-      .setName("bounty")
-      .setDescription("Bounty commands")
-      .addSubcommand((sc) =>
-        sc
-          .setName("status")
-          .setDescription("Check bounty status by tribe or id")
-          .addStringOption((o) => o.setName("tribe").setDescription("Tribe name").setRequired(false))
-          .addStringOption((o) => o.setName("id").setDescription("Record id").setRequired(false))
-      ),
   ].map((c) => c.toJSON());
 
   const rest = new REST({ version: "10" }).setToken(TOKEN);

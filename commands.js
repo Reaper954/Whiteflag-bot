@@ -130,3 +130,4 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     process.exit(1);
   }
 })();
+1
