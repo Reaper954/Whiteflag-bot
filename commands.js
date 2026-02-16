@@ -27,9 +27,9 @@ const commands = [
     .addChannelOption((o) => o.setName("apply_channel").setDescription("Apply channel").setRequired(true))
     .addChannelOption((o) => o.setName("admin_channel").setDescription("Admin review channel").setRequired(true))
     .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
-    .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false))
     .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
-    .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true)),
+    .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true))
+    .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
 
   new SlashCommandBuilder().setName("rules").setDescription("Show the White Flag rules (ephemeral)."),
 
