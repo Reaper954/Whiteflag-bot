@@ -41,6 +41,37 @@ const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID || null;
 const GUILD_ID = process.env.GUILD_ID || null;
 
+
+/**
+ * Admin control roles (either role grants full control over admin actions).
+ * Users with Discord Administrator permission are also allowed.
+ */
+const CONTROL_ROLE_NAMES = ["EXODUS BOT Creator", "White Flag Handler"];
+
+function memberHasControlRole(member) {
+  try {
+    if (!member || !member.roles || !member.roles.cache) return false;
+    return member.roles.cache.some((r) => CONTROL_ROLE_NAMES.includes(r.name));
+  } catch {
+    return false;
+  }
+}
+
+function memberIsAdminOverride(member) {
+  try {
+    return member?.permissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+function requireControl(interaction, member) {
+  const ok = memberIsAdminOverride(member) || memberHasControlRole(member);
+  if (ok) return true;
+  interaction.reply({ content: "⛔ You don’t have permission to use this action.", ephemeral: true }).catch(() => null);
+  return false;
+}
+
 if (!TOKEN) {
   console.error("Missing DISCORD_TOKEN in environment.");
   process.exit(1);
@@ -486,7 +517,7 @@ function buildRulesEmbed() {
         "**Violations**",
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection = **removal**.",
-        "• If you break rules: White Flag removed, and a bounty will be placed on your tribe.",
+        "• If you break rules: White Flag removed, **OPEN SEASON**, bounty placed.",
       ].join("\n")
     );
 }
@@ -537,7 +568,7 @@ function buildAdminReviewRow(reqId) {
 
 function buildEndEarlyRow(reqId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`${CID.ADMIN_END_EARLY_PREFIX}${reqId}`).setLabel("End Early (Force Bounty)").setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`${CID.ADMIN_END_EARLY_PREFIX}${reqId}`).setLabel("End Early (Open Season)").setStyle(ButtonStyle.Danger)
   );
 }
 
@@ -558,8 +589,8 @@ async function registerSlashCommandsOnStartup() {
       .addChannelOption((o) => o.setName("admin_channel").setDescription("Admin review channel").setRequired(true))
       .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
       .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
-      .addRoleOption((o) => o.setName("bount_role").setDescription("Bounty role").setRequired(true))
-      .addChannelOption((o) => o.setName("bounty_review_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
+      .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true))
+      .addChannelOption((o) => o.setName("bounty_claims_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
       .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
     new SlashCommandBuilder().setName("rules").setDescription("Show rules"),
     new SlashCommandBuilder().setName("whiteflags").setDescription("White Flag utilities.").addSubcommand((sc) => sc.setName("active").setDescription("Show active White Flags")),
@@ -1132,7 +1163,7 @@ try {
         return interaction.reply({ content: `✅ Approved White Flag for **${escapeMd(req.tribeName)}**. Ends ${fmtDiscordRelativeTime(req.approvedAt + SEVEN_DAYS_MS)}.`, flags: 64 });
       }
 
-      // Admin end early (bounty)
+      // Admin end early (open season + bounty)
       if (interaction.customId.startsWith(CID.ADMIN_END_EARLY_PREFIX)) {
         if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
           return interaction.reply({ content: "Admins only.", flags: 64 });
@@ -1170,7 +1201,7 @@ try {
         const announceCh = await safeFetchChannel(guild, state.announceChannelId);
         const openPing = state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : "";
         if (announceCh && isTextChannel(announceCh)) {
-          await announceCh.send(` **Bounty** Called for tribe **${escapeMd(req.tribeName)}**.`);
+          await announceCh.send(` **OPEN SEASON** Called for tribe **${escapeMd(req.tribeName)}**.`);
         }
 
         // Post bounty + claim button
