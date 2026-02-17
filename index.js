@@ -1153,7 +1153,7 @@ try {
         req.bounty.startedAt = now;
         req.bounty.endsAt = now + ONE_WEEK_MS;
         req.bounty.startedBy = interaction.user.id;
-        req.bounty.reason = "White Flag ended early (Open Season).";
+        req.bounty.reason = "White Flag ended early.";
         req.bounty.locked = false;
         req.bounty.lockedByClaimId = null;
 
@@ -1161,7 +1161,7 @@ try {
         persistAll();
 
         // DM requester
-        await safeDmUser(bot, req.requestedBy, `🛑 Your White Flag for **${escapeMd(req.tribeName)}** was **ENDED EARLY** by admins. Open Season is active and a bounty has been issued.`);
+        await safeDmUser(bot, req.requestedBy, `🛑 Your White Flag for **${escapeMd(req.tribeName)}** was **ENDED EARLY** by admins.A bounty has been issued for your tribe.`);
 
         scheduleBountyExpiry(requestId);
         scheduleBountyExpiryWarning(requestId);
@@ -1170,7 +1170,7 @@ try {
         const announceCh = await safeFetchChannel(guild, state.announceChannelId);
         const openPing = state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : "";
         if (announceCh && isTextChannel(announceCh)) {
-          await announceCh.send(`🛑 **OPEN SEASON** — White Flag ended early for **${escapeMd(req.tribeName)}**.`);
+          await announceCh.send(` **OPEN SEASON** Called for tribe **${escapeMd(req.tribeName)}**.`);
         }
 
         // Post bounty + claim button
