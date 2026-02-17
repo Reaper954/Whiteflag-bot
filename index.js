@@ -515,15 +515,15 @@ async function expireOverdueOnStartup() {
 // -------------------- Panels --------------------
 function buildRulesEmbed() {
   return new EmbedBuilder()
-    .setTitle("🛡️White Flag Protocol🛡️")
+    .setTitle("🛡️White Flag Rules🛡️")
     .setDescription(
       [
-        "**PROTOCOL:** This system grants temporary protection to new tribes. Abuse triggers enforcement and may result in an active bounty.",
+        "The White Flag system grants temporary protection to new tribes. Abuse triggers enforcement and will result in a bounty on your tribe.",
         "",
         "**Eligibility & Duration**",
-        "• White Flag is for **new tribes only**.",
+        "• White Flags are for **new tribes only**.",
         "• Protection lasts **7 days from approval**.",
-        "• Admins may remove early if rules are broken.",
+        "• Admins will remove the white flag early if rules are broken.",
         "",
         "**While White Flag is Active**",
         "• **YOU CAN NOT RAID OTHER TRIBES.**",
@@ -531,9 +531,9 @@ function buildRulesEmbed() {
         "• PvP is allowed as long as you are not raiding/scouting bases.",
         "",
         "**Violations**",
-        "• Raiding while under White Flag = **immediate removal**.",
-        "• Abuse of protection = **removal**.",
-        "• If you break rules: White Flag removed and a bounty will be placed on your tribe.",
+        "• Raiding while under a White Flag = **immediate removal**.",
+        "• Abuse of protection = **immediate removal**.",
+        "• If you break any of the rules: Your White Flag will be removed and a bounty will be placed on your tribe.",
       ].join("\n")
     );
 }
