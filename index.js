@@ -605,7 +605,7 @@ async function registerSlashCommandsOnStartup() {
       .addChannelOption((o) => o.setName("admin_channel").setDescription("Admin review channel").setRequired(true))
       .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
       .addRoleOption((o) => o.setName("admin_role").setDescription("Admin_role").setRequired(true))
-      .addRoleOption((o) => o.setName("Pvp_role").setDescription("Pvp_role").setRequired(true))
+      .addRoleOption((o) => o.setName("pvp_role").setDescription("pvp_role").setRequired(true))
       .addChannelOption((o) => o.setName("bounty_claims_review_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
       .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
     new SlashCommandBuilder().setName("rules").setDescription("Show rules"),
