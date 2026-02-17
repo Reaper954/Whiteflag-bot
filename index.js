@@ -222,6 +222,22 @@ function escapeMd(str) {
   return String(str).replace(/([*_`~|>])/g, "\\$1");
 }
 
+
+function hasBotStaffRole(member) {
+  try {
+    const allowed = ["EXODUS BOT Creator", "White Flag Handler"];
+    if (!member || !member.roles || !member.roles.cache) return false;
+    return member.roles.cache.some((role) => allowed.includes(role.name));
+  } catch {
+    return false;
+  }
+}
+
+function denyNoRole(interaction, msg = "⛔ You do not have permission to use this command.") {
+  return interaction.reply({ content: msg, flags: 64 });
+}
+
+
 function isTextChannel(ch) {
   return (
     ch &&
@@ -705,9 +721,7 @@ bot.on("interactionCreate", async (interaction) => {
       const cmd = interaction.commandName;
 
       if (cmd === "setup") {
-        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "Admins only.", flags: 64 });
-        }
+        if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
         const guild = interaction.guild;
         if (!guild) return interaction.reply({ content: "Guild only.", flags: 64 });
 
@@ -786,9 +800,7 @@ bot.on("interactionCreate", async (interaction) => {
       }
 
       if (cmd === "admin") {
-        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "Admins only.", flags: 64 });
-        }
+        if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
         const sub = interaction.options.getSubcommand();
         if (sub === "bounties") {
           const filter = interaction.options.getString("filter") || "active";
@@ -814,9 +826,7 @@ bot.on("interactionCreate", async (interaction) => {
         const sub = interaction.options.getSubcommand();
 
         if (sub === "add") {
-          if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: "Admins only.", flags: 64 });
-          }
+          if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
           const tribe = (interaction.options.getString("tribe") || "").trim();
           const ign = (interaction.options.getString("ign") || "").trim();
           const server = (interaction.options.getString("server") || "").trim();
@@ -904,9 +914,7 @@ bot.on("interactionCreate", async (interaction) => {
         }
 
         if (sub === "remove") {
-          if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-            return interaction.reply({ content: "Admins only.", flags: 64 });
-          }
+          if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
           const tribe = (interaction.options.getString("tribe") || "").trim();
           const id = (interaction.options.getString("id") || "").trim();
           if (!tribe && !id) return interaction.reply({ content: "Provide tribe or id.", flags: 64 });
@@ -1076,9 +1084,7 @@ bot.on("interactionCreate", async (interaction) => {
 
       // Admin approve/deny whiteflag
       if (interaction.customId.startsWith(CID.ADMIN_APPROVE_PREFIX) || interaction.customId.startsWith(CID.ADMIN_DENY_PREFIX)) {
-        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "Admins only.", flags: 64 });
-        }
+        if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
         const isApprove = interaction.customId.startsWith(CID.ADMIN_APPROVE_PREFIX);
         const requestId = interaction.customId.split(":")[1];
         requests = safeReadJson(REQUESTS_PATH, {});
@@ -1165,9 +1171,7 @@ try {
 
       // Admin end early (open season + bounty)
       if (interaction.customId.startsWith(CID.ADMIN_END_EARLY_PREFIX)) {
-        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "Admins only.", flags: 64 });
-        }
+        if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
         const requestId = interaction.customId.split(":")[1];
         requests = safeReadJson(REQUESTS_PATH, {});
         const req = requests[requestId];
@@ -1249,9 +1253,7 @@ try {
 
       // Approve/Deny bounty claim
       if (interaction.customId.startsWith(CID.BOUNTY_CLAIM_APPROVE_PREFIX) || interaction.customId.startsWith(CID.BOUNTY_CLAIM_DENY_PREFIX)) {
-        if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "Admins only.", flags: 64 });
-        }
+        if (!hasBotStaffRole(interaction.member)) { return denyNoRole(interaction); }
 
         const approve = interaction.customId.startsWith(CID.BOUNTY_CLAIM_APPROVE_PREFIX);
         const claimId = interaction.customId.split(":")[1];
