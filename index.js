@@ -546,7 +546,7 @@ function buildRulesRow() {
 
 function buildApplyEmbed() {
   return new EmbedBuilder()
-    .setTitle("🛡️White Flag Application🛡️")
+    .setTitle("🛡️White Flag Applications🛡️")
     .setDescription(
       ["Before applying, you must read and accept the rules.", "", "Choose:", "• **25x PVP**", "• **100x PVP Chaos**", "", "**Important:** Only **1 White Flag per tribe.**"].join("\n")
     );
@@ -604,7 +604,7 @@ async function registerSlashCommandsOnStartup() {
       .addChannelOption((o) => o.setName("apply_channel").setDescription("Apply channel").setRequired(true))
       .addChannelOption((o) => o.setName("admin_channel").setDescription("Admin review channel").setRequired(true))
       .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
-      .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
+      .addRoleOption((o) => o.setName("admin_role").setDescription("Admin_role").setRequired(true))
       .addRoleOption((o) => o.setName("Pvp_role").setDescription("Pvp_role").setRequired(true))
       .addChannelOption((o) => o.setName("bounty_claims_review_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
       .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
