@@ -486,7 +486,7 @@ function buildRulesEmbed() {
         "**Violations**",
         "• Raiding while under White Flag = **immediate removal**.",
         "• Abuse of protection = **removal**.",
-        "• If you break rules: White Flag removed, **OPEN SEASON**, bounty placed.",
+        "• If you break rules: White Flag removed, and a bounty will be placed on your tribe.",
       ].join("\n")
     );
 }
@@ -537,7 +537,7 @@ function buildAdminReviewRow(reqId) {
 
 function buildEndEarlyRow(reqId) {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`${CID.ADMIN_END_EARLY_PREFIX}${reqId}`).setLabel("End Early (Open Season)").setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`${CID.ADMIN_END_EARLY_PREFIX}${reqId}`).setLabel("End Early (Force Bounty)").setStyle(ButtonStyle.Danger)
   );
 }
 
@@ -558,8 +558,8 @@ async function registerSlashCommandsOnStartup() {
       .addChannelOption((o) => o.setName("admin_channel").setDescription("Admin review channel").setRequired(true))
       .addChannelOption((o) => o.setName("announce_channel").setDescription("Announcements channel").setRequired(true))
       .addRoleOption((o) => o.setName("admin_role").setDescription("Admin role").setRequired(true))
-      .addRoleOption((o) => o.setName("open_season_role").setDescription("Open Season role").setRequired(true))
-      .addChannelOption((o) => o.setName("bounty_claims_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
+      .addRoleOption((o) => o.setName("bount_role").setDescription("Bounty role").setRequired(true))
+      .addChannelOption((o) => o.setName("bounty_review_channel").setDescription("Channel for bounty claim admin logs (optional)").setRequired(false))
       .addChannelOption((o) => o.setName("bounty_channel").setDescription("Bounty channel (optional)").setRequired(false)),
     new SlashCommandBuilder().setName("rules").setDescription("Show rules"),
     new SlashCommandBuilder().setName("whiteflags").setDescription("White Flag utilities.").addSubcommand((sc) => sc.setName("active").setDescription("Show active White Flags")),
@@ -1132,7 +1132,7 @@ try {
         return interaction.reply({ content: `✅ Approved White Flag for **${escapeMd(req.tribeName)}**. Ends ${fmtDiscordRelativeTime(req.approvedAt + SEVEN_DAYS_MS)}.`, flags: 64 });
       }
 
-      // Admin end early (open season + bounty)
+      // Admin end early (bounty)
       if (interaction.customId.startsWith(CID.ADMIN_END_EARLY_PREFIX)) {
         if (!interaction.memberPermissions?.has(PermissionsBitField.Flags.Administrator)) {
           return interaction.reply({ content: "Admins only.", flags: 64 });
@@ -1170,7 +1170,7 @@ try {
         const announceCh = await safeFetchChannel(guild, state.announceChannelId);
         const openPing = state.openSeasonRoleId ? `<@&${state.openSeasonRoleId}> ` : "";
         if (announceCh && isTextChannel(announceCh)) {
-          await announceCh.send(` **OPEN SEASON** Called for tribe **${escapeMd(req.tribeName)}**.`);
+          await announceCh.send(` **Bounty** Called for tribe **${escapeMd(req.tribeName)}**.`);
         }
 
         // Post bounty + claim button
